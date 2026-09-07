@@ -1,7 +1,8 @@
 """Secret-safe SerpApi key loading.
 
-Lookup order: $SERPAPI_KEY, then api_key.json beside the project root.
-The file may hold the raw key or a small JSON object naming it.
+Lookup order: $SERPAPI_KEY (including .env), then api_key.json beside the
+project root. The file may hold the raw key, a NAME="value" assignment
+(SERPAPI_KEY or SERP_API_KEY), or a small JSON object naming the key.
 The key value is returned but never printed or logged anywhere.
 """
 
@@ -9,11 +10,17 @@ import json
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 _KEY_FIELDS = ("api_key", "SERPAPI_KEY", "SERP_API_KEY", "serpapi_key", "key")
 
 
 def load_key(search_dir=None, env=None) -> str:
-    source = env if env is not None else os.environ
+    if env is None:
+        load_dotenv()
+        source = os.environ
+    else:
+        source = env
     key = (source.get("SERPAPI_KEY") or "").strip()
     if key:
         return key

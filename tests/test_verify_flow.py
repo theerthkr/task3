@@ -1,10 +1,5 @@
 """Local face-verification flow: no network, no SerpApi, real embeddings."""
 
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
 from face_search import faces, rank
 
 A = "HHGOA-FACE-BLOCKCHAIN/test_images/person1_a.jpg"

@@ -8,7 +8,6 @@ sends no_cache=true so identical repeats serve free cache.
 import os
 
 import requests
-from dotenv import load_dotenv
 
 from face_search import config
 
@@ -22,6 +21,7 @@ _CANDIDATE_FIELDS = (
     "image_width",
     "image_height",
     "match_kind",
+    "engine",
 )
 
 
@@ -82,29 +82,31 @@ def lens_search(api_key: str, image_id: str = "", image_url: str = "") -> dict:
     return data
 
 
-def parse_results(raw_response: dict) -> list:
-    """Flatten visual_matches + exact_matches into one candidate list."""
+def parse_results(raw_response: dict, engine: str = config.LENS_ENGINE) -> list:
+    """Flatten visual_matches + exact_matches into one candidate list.
+
+    Every row carries exactly _CANDIDATE_FIELDS, tagged with its engine.
+    """
     candidates = []
     for kind in ("visual_matches", "exact_matches"):
         for position, match in enumerate(raw_response.get(kind, []), 1):
-            candidates.append(
-                {
-                    "position": match.get("position", position),
-                    "title": match.get("title", "N/A"),
-                    "source": match.get("source", "N/A"),
-                    "page_url": match.get("link", "N/A"),
-                    "image_url": match.get("image", "N/A"),
-                    "thumbnail_url": match.get("thumbnail", "N/A"),
-                    "image_width": match.get("image_width"),
-                    "image_height": match.get("image_height"),
-                    "match_kind": kind,
-                }
-            )
+            values = {
+                "position": match.get("position", position),
+                "title": match.get("title", "N/A"),
+                "source": match.get("source", "N/A"),
+                "page_url": match.get("link", "N/A"),
+                "image_url": match.get("image", "N/A"),
+                "thumbnail_url": match.get("thumbnail", "N/A"),
+                "image_width": match.get("image_width"),
+                "image_height": match.get("image_height"),
+                "match_kind": kind,
+                "engine": engine,
+            }
+            candidates.append({field: values[field] for field in _CANDIDATE_FIELDS})
     return candidates
 
 
 def load_key() -> str:
     from face_search.key_store import load_key as _load
 
-    load_dotenv()
     return _load(search_dir=config.PROJECT_ROOT)

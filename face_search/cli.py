@@ -3,9 +3,6 @@
 import argparse
 import json
 import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from face_search import config, pipeline
 
@@ -25,6 +22,24 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def format_report(report: dict) -> str:
+    lines = [f"Mode: {report['mode']} (searches spent: {report['searches_spent']})"]
+    if report["mode"] == "DRY_RUN":
+        lines.append(f"Query face: detected in {report['query']['path']}")
+        lines.append("No matches yet — rerun with --live or --reuse-cache.")
+    else:
+        lines.append(
+            f"Candidates: {report['candidates_found']} | Verified: {report['verified']}"
+        )
+        for position, match in enumerate(report["matches"][:5], 1):
+            lines.append(
+                f"[{position}] {match['similarity']} {match['platform']} {match['title']}"
+            )
+            lines.append(f"    {match['page_url']}")
+    lines.append(f"Run dir: {report['run_dir']}")
+    return "\n".join(lines)
+
+
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     try:
@@ -39,20 +54,11 @@ def main(argv=None) -> int:
     except Exception as err:
         print(f"ERROR: {err}", file=sys.stderr)
         return 1
-    print(f"Mode: {report['mode']} (searches spent: {report['searches_spent']})")
-    if report["mode"] == "DRY_RUN":
-        print(f"Query face: detected in {report['query']['path']}")
-        print("No matches yet — rerun with --live or --reuse-cache.")
-    else:
-        print(f"Candidates: {report['candidates_found']} | Verified: {report['verified']}")
-        for position, match in enumerate(report["matches"][:5], 1):
-            print(f"[{position}] {match['similarity']} {match['platform']} {match['title']}")
-            print(f"    {match['page_url']}")
+    print(format_report(report))
     if args.out:
         with open(args.out, "w", encoding="utf-8") as handle:
             json.dump(report, handle, indent=2)
         print(f"Report: {args.out}")
-    print(f"Run dir: {report['run_dir']}")
     return 0
 
 

@@ -17,6 +17,7 @@ DEFAULT_TOP_N = 10
 DEFAULT_THRESHOLD = 0.45
 REQUEST_TIMEOUT = 30
 DOWNLOAD_TIMEOUT = 10
+MAX_DOWNLOAD_BYTES = 20 * 1024 * 1024
 
 SOCIAL_DOMAINS = (
     "linkedin.com",
@@ -34,3 +35,9 @@ USER_AGENT = (
 
 FACE_MODEL_PACK = "buffalo_l"
 FACE_DET_SIZE = (640, 640)
+
+QUERY_FILENAME = "query.jpg"
+RAW_FILENAME = "lens_raw.json"
+REPORT_FILENAME = "report.json"
+CANDIDATE_DIR = "candidates"
+CANDIDATE_PATTERN = "candidate_{position}.jpg"
