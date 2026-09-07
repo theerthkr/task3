@@ -108,15 +108,11 @@ def run(
             if is_profile:
                 row["llm"] = llm_judge._fallback(row, reason="profile domain fallback")
 
-    # Finalized profiles: verified face matches that LLM (or fallback) says is profile -> pass immediately, show all similar
+    # Finalized profiles: ONLY verified face matches (standard threshold, default 0.45) that LLM/fallback says is profile
+    # 0.28 must NOT be approved — strict threshold kept
     finalized = [r for r in verified_presented if r.get("llm", {}).get("is_social_profile")]
     if not finalized and verified_presented:
         finalized = verified_presented[:5]
-    # If still none but ranked has profile-like (e.g., github/bebee) — show them so LLM/social is always visible, even below threshold
-    if not finalized:
-        prof_ranked = [r for r in ranked_presented if r.get("llm", {}).get("is_social_profile")]
-        if prof_ranked:
-            finalized = prof_ranked[:5]
     finalized = finalized[:10]
 
     # Aggregate LLM errors for visible pipeline warning (not silent)
@@ -152,12 +148,8 @@ def run(
         llm_status = "fallback_no_key"
         llm_note = "LLM disabled — no OPENROUTER_API_KEY, deterministic fallback active (still passes github/bebee/bold.pro immediately). Add free key at openrouter.ai/keys for better verdicts."
 
-    # Ensure top ranked profile-like still shown even when LLM failed (profile-format fallback)
-    if llm_status.startswith("error") and not finalized:
-        # show top ranked that looked like profile via fallback, even if not verified
-        fallback_top = [r for r in ranked_presented if r.get("llm", {}).get("is_social_profile")]
-        if fallback_top:
-            finalized = fallback_top[:5]
+    # If LLM errored, do NOT show below-threshold as finalized — keep strict threshold
+    # (previous fallback that showed 0.28 as finalized is removed)
 
     report = _build_report(
         mode=mode,
