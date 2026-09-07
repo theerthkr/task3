@@ -5,10 +5,19 @@ Only imports inward: face_search.*. No core file imports ui.
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+# Make project root importable when Streamlit runs as `streamlit run ui/app.py`
+# Streamlit adds the script dir (ui/) to sys.path, not the project root, so
+# `import face_search` would fail without this.
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
 import io
 import os
 import tempfile
-from pathlib import Path
 
 import streamlit as st
 from PIL import Image, ImageDraw
