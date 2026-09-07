@@ -44,6 +44,12 @@ def format_report(report: dict) -> str:
                 f"[{position}] sim={row.get('similarity')} has_face={row.get('has_face')} verified={row.get('verified')} {row.get('platform')} | {row.get('title')}"
             )
             lines.append(f"    source: {row.get('source')} | {row.get('page_url')}")
+            llm = row.get("llm") or {}
+            if llm.get("llm_used"):
+                handle = f" @{llm['handle']}" if llm.get("handle") else ""
+                lines.append(
+                    f"    LLM: social_profile={llm.get('is_social_profile')} conf={llm.get('confidence')}{handle} — {llm.get('reason')}"
+                )
         if ranked and report["verified"] == 0:
             lines.append("Note: ranked list shows all candidates sorted by similarity — none crossed threshold.")
     lines.append(f"Run dir: {report['run_dir']}")

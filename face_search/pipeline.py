@@ -12,7 +12,7 @@ import json
 import os
 from datetime import datetime, timezone
 
-from face_search import config, faces, images, rank, serp_client
+from face_search import config, faces, images, llm_judge, rank, serp_client
 
 
 def run(
@@ -73,6 +73,14 @@ def run(
     # Present ranked_all as the main ranked document (source + similarity for each).
     ranked_presented = [_present_ranked(row) for row in ranked_all]
     verified_presented = [_present_ranked(row) for row in verified]
+
+    # LLM judge (opt-in via OPENROUTER_API_KEY): is each hit an actual social profile?
+    # Judge verified hits, else top ranked, so social pages like bebee still get verdicts.
+    to_judge = verified_presented or ranked_presented[:5]
+    verdicts = {v["page_url"]: v["llm"] for v in llm_judge.judge_matches(to_judge)}
+    for row in ranked_presented + verified_presented:
+        if row.get("page_url") in verdicts:
+            row["llm"] = verdicts[row["page_url"]]
 
     return _build_report(
         mode=mode,

@@ -1,7 +1,7 @@
 Mode: DRY_RUN (searches spent: 0)
 Query face: detected in HHGOA-FACE-BLOCKCHAIN/test_images/person1_a.jpg
 No matches yet — rerun with --live or --reuse-cache.
-Run dir: runs/20260907T153919Z
+Run dir: runs/20260907T170728Z
 ------------------------------------------------------------
 Mode: CACHE_REPLAY (searches spent: 0)
 Candidates: 2 | Ranked: 2 | Verified: 0
@@ -10,4 +10,4 @@ Candidates: 2 | Ranked: 2 | Verified: 0
 [2] sim=None has_face=False verified=False web | Jane Doe — ExampleConf
     source: Example | https://example.com/talk
 Note: ranked list shows all candidates sorted by similarity — none crossed threshold.
-Run dir: runs/20260907T153923Z
+Run dir: runs/20260907T170731Z
