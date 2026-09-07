@@ -38,6 +38,8 @@ with c3:
 if serp_key and serp_key.strip(): os.environ["SERPAPI_KEY"]=serp_key.strip()
 # else: keep bundled api_key.json — no env override, SerpApi will use bundled key
 if openrouter_key and openrouter_key.strip(): os.environ["OPENROUTER_API_KEY"]=openrouter_key.strip()
+# Highlight: LLM time warning (top)
+st.info("⏳ **LLM takes a lot of time (20-40s) when it works** — OpenRouter judges 8-10 profiles ×600 tokens. Keep tab open after SEARCH. If no `OPENROUTER_API_KEY`, fallback still passes `github/bebee/bold.pro`. SerpApi: leave empty to use bundled key, only add yours if 429.", icon="⚠️")
 
 # LLM model — searchable, fetches all from OpenRouter
 from face_search.llm_judge import FREE_MODELS, fetch_models, DEFAULT_MODEL
@@ -158,10 +160,20 @@ if go:
     else:
         from face_search.pipeline import run as pipeline_run
         try:
-            with st.spinner("Hosting → Lens → verifying 10…"):
+            # Highlight long wait
+            if openrouter_key and openrouter_key.strip():
+                st.warning("⏳ LLM is ON — this will take 20-40s (judging 10 profiles) — **do NOT close tab**. Face search is instant, LLM is slow.", icon="⚠️")
+            with st.spinner("Hosting → Lens → verifying 10… → LLM judging (20-40s if key set) — please wait…"):
                 if link_path and query_path==link_path: report=pipeline_run(image="", image_url=link_in.strip(), top_n=10, live=True, llm_model=llm_model, anchor=anchor_wanted)
                 else: report=pipeline_run(image=query_path, image_url="", top_n=10, live=True, llm_model=llm_model, anchor=anchor_wanted)
             st.session_state.report=report
+            # Post-search highlight
+            if report.get("llm_status","ok").startswith("error"):
+                st.error(f"⚠️ LLM took time but failed — {report.get('llm_note')} — showing fallback profiles. Try another :free model.")
+            elif report.get("llm_status")=="fallback_no_key":
+                st.info("LLM was fallback (no key) — still passed github/bebee/bold.pro via heuristics. Add OpenRouter key for better famous-people verdicts.")
+            else:
+                st.success("✓ Search done — LLM finished (if key was set, check FINALIZED PROFILES).")
             bc=report.get("blockchain")
             if anchor_wanted and bc and bc.get("items") and bc["items"][0].get("receipt"): st.toast(f"Anchored {bc['items'][0]['bytes32_hex'][:10]}…", icon="⛓")
         except ImgOpsValidationError as e: st.error(f"Image too large: {e}")

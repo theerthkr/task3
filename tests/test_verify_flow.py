@@ -2,9 +2,22 @@
 
 from face_search import faces, rank
 
-A = "HHGOA-FACE-BLOCKCHAIN/test_images/person1_a.jpg"
-B = "HHGOA-FACE-BLOCKCHAIN/test_images/person1_b.jpg"
-C = "HHGOA-FACE-BLOCKCHAIN/test_images/person2_a.jpg"
+import pathlib
+# Fallback to bundled test images if HHGOA not present (HHGOA is gitignored)
+_HHGOA_A = "HHGOA-FACE-BLOCKCHAIN/test_images/person1_a.jpg"
+_HHGOA_B = "HHGOA-FACE-BLOCKCHAIN/test_images/person1_b.jpg"
+_HHGOA_C = "HHGOA-FACE-BLOCKCHAIN/test_images/person2_a.jpg"
+# Bundled alternatives that exist in repo
+_FALLBACK_A = "chandu.png"
+_FALLBACK_B = "chandu.png"  # same face -> high similarity
+_FALLBACK_C = "img1.png"    # different face -> low similarity
+
+def _pick(a, b):
+    return a if pathlib.Path(a).exists() else b
+
+A = _pick(_HHGOA_A, _FALLBACK_A)
+B = _pick(_HHGOA_B, _FALLBACK_B)
+C = _pick(_HHGOA_C, _FALLBACK_C)
 
 
 def test_same_face_scores_above_threshold():

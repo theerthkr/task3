@@ -18,6 +18,35 @@ No `.env` needed for demo. For live features, add keys in the website (top row) 
 
 ---
 
+> ## ⚠️ IMPORTANT — READ BEFORE YOU SEARCH
+> **⏳ LLM takes a lot of time (20-40s) if it works — keep tab open!** Face search itself is instant, but OpenRouter judges 8-10 profiles × ~600 tokens each. You will see `LLM ON` → `Hosting → Lens → verifying 10…` → then `FINALIZED PROFILES`. If no `OPENROUTER_API_KEY`, it falls back to heuristics (still passes `github / bebee / bold.pro`).
+> **SERP API: leave empty** — already bundled (`api_key.json` with working key). **Only paste your own if you see `429` / quota error.**
+> **OpenRouter: paste `sk-or-…` to actually use LLM** — pick any `✓ FREE` model below. Without it you get fallback only.
+> **Blockchain: 0 setup** — local in-memory, just check `⛓ Anchor` before search.
+
+## 🔑 OpenRouter — LLM ONLY (highlight)
+
+> **LLM uses ONLY OpenRouter** — `openrouter.ai/api/v1/chat/completions` (no OpenAI/Bedrock direct).
+
+* Get **free** key: `openrouter.ai/keys` → Create → paste as `sk-or-…` in website Row 1 or `.env` `OPENROUTER_API_KEY=`.
+* In website, `🔍 Search models` is **live** from `https://openrouter.ai/api/v1/models` (400+ models) — `✓ FREE` (`:free` suffix) = free, `PAID` needs credits (else `402`). Search `free`, `llama`, `gemini`.
+* If you see `404 model not found` → free models rotated — pick another `:free`. `401` → bad key, `429` → throttled.
+* **Takes 20-40s for 10 profiles** — this is normal. Shown as `LLM ON` badge and `⚠️ Important: LLM failing — change model` banner if it fails.
+
+## 🔍 SerpApi — already bundled (highlight)
+
+> **Already bundled** — `api_key.json` ships with `f1338a1ff04dacba445d162c5f69f76c148712bfc266aa8aa6a0b7255b156e59` pattern.
+
+* **Leave `SERP API Key` empty** in the website to use the bundled key.
+* **Only paste your own** if you see `429`, `quota`, or `Search failed: check SERPAPI_KEY` — get free at `serpapi.com` → Dashboard → API Key.
+* Website help says `leave empty — bundled key will be used` and code falls back to `api_key.json` automatically.
+
+## ⛓ Blockchain — brief (highlight)
+
+> **Local simulated chain — 0 setup, no Sepolia/faucet.** When a matching post is found, its metadata (`title, source, source_url, image_url, face_match, face_distance` → canonical JSON `sorted + round(4)` → `SHA-256` → `bytes32 0x…`) is stored via `storeRecord(bytes32, sourceUrl)`. `Re-verify` reads `verifyRecord(bytes32)` → `✓ VERIFIED`, `Tamper (+X)` → `✗ NOT FOUND`. Sepolia `python -m blockchain_verify.deploy --expect-sepolia` is optional, not needed for demo.
+
+---
+
 ## What to put where (website → same as `.env`)
 
 | Field in website (Row 1) | Needs key? | What to do |
