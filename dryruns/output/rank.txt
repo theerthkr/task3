@@ -1,0 +1,4 @@
+input: 5 rows (duplicate, below-threshold, faceless included)
+output: 2 rows
+- 0.6 github https://github.com/jane
+- 0.9 web https://example.com/a

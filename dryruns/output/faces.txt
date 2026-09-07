@@ -1,0 +1,4 @@
+faces in A: 1
+faces in C: 1
+same-photo similarity : 1.0000 (threshold 0.45 -> match)
+cross-person similarity: 0.0187 (threshold 0.45 -> no match)

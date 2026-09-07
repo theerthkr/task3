@@ -1,0 +1,8 @@
+schema: position, title, source, page_url, image_url, thumbnail_url, image_width, image_height, match_kind, engine
+candidates: 2
+- [visual_matches/google_lens] Jane Doe — ExampleConf
+  page: https://example.com/talk
+  image: https://example.com/i.jpg
+- [exact_matches/google_lens] Jane portrait
+  page: https://linkedin.com/in/janedoe
+  image: https://example.com/i2.jpg

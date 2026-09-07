@@ -1,0 +1,4 @@
+raw file          -> len=11 value ends with …ABC
+json object       -> len=12 value ends with …DEF
+name=value        -> len=14 value ends with …GHI
+env precedence    -> len=11 value ends with …JKL
