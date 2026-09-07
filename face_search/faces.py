@@ -1,9 +1,40 @@
 """Face embeddings via InsightFace. Lazy singleton: no model load on import."""
 
+import warnings
+
 import cv2
 import numpy as np
 
 from face_search import config
+
+# InsightFace 0.7 still calls SimilarityTransform.estimate, deprecated in
+# scikit-image 0.26 (FutureWarning, removed in 2.2). Patch it once at import
+# to delegate to the new from_estimate API so no warning is emitted and
+# future removal does not break us. Pure delegation, same geometry.
+try:
+    from skimage.transform import SimilarityTransform as _SimilarityTransform
+
+    _orig_estimate = _SimilarityTransform.estimate
+
+    def _patched_estimate(self, src, dst):  # type: ignore[no-untyped-def]
+        result = _SimilarityTransform.from_estimate(src, dst)
+        if not result:
+            return False
+        self.__dict__.update(result.__dict__)
+        return True
+
+    # Only patch when the installed scikit-image actually emits the deprecation.
+    if "deprecated" in _orig_estimate.__doc__.lower():  # type: ignore[union-attr]
+        _SimilarityTransform.estimate = _patched_estimate  # type: ignore[method-assign]
+
+    # Belt-and-suspenders: silence any remaining FutureWarning from this path.
+    warnings.filterwarnings(
+        "ignore",
+        category=FutureWarning,
+        message=r".*estimate.*deprecated.*",
+    )
+except Exception:
+    pass
 
 _engine = None
 
