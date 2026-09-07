@@ -1,0 +1,6 @@
+- web/None | web_page | name='Chandraveer Singh Solanki' company='Find professionals — Bebee'
+  page: https://bebee.com/in/people/chandraveer-singh-solanki
+- github/janedoe | social_profile | name='Jane Doe' company='GitHub'
+  page: https://github.com/janedoe
+- linkedin/janedoe | social_profile | name='Jane Doe' company='LinkedIn'
+  page: https://www.linkedin.com/in/janedoe

@@ -1,8 +1,8 @@
 Mode: DRY_RUN (searches spent: 0)
 Query face: detected in HHGOA-FACE-BLOCKCHAIN/test_images/person1_a.jpg
 No matches yet — rerun with --live or --reuse-cache.
-Run dir: runs/20260907T090124Z
+Run dir: runs/20260907T124431Z
 ------------------------------------------------------------
 Mode: CACHE_REPLAY (searches spent: 0)
 Candidates: 2 | Verified: 0
-Run dir: runs/20260907T090127Z
+Run dir: runs/20260907T124434Z

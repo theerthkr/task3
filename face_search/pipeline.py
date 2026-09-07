@@ -1,14 +1,17 @@
-"""Orchestration only: ingest, search (or replay), verify, rank, report.
+"""Orchestration only: ingest, host to URL, search (or replay), verify, rank, enrich, report.
 
 Search-spend accounting is explicit: the returned report always carries
 searches_spent (0 for dry-run and cache replay, 1 for a live search).
+
+URL-only contract: local files are hosted via imgops_uploader to a 1-hour
+public URL; SerpApi is always called with url= (never image_id / direct upload).
 """
 
 import json
 import os
 from datetime import datetime, timezone
 
-from face_search import config, faces, images, rank, serp_client
+from face_search import config, enrich, faces, images, rank, serp_client
 
 
 def run(
@@ -24,6 +27,7 @@ def run(
         raise ValueError(f"top_n must be 0 or more, got {top_n}.")
     run_dir = _make_run_dir(out_dir)
 
+    # Always resolve query to a local file for embedding, but also ensure we have a public URL.
     query_path = images.fetch_query_image(
         image=image,
         image_url=image_url,
@@ -39,6 +43,7 @@ def run(
             mode="DRY_RUN",
             searches_spent=0,
             query_path=query_path,
+            hosted_url=None,
             faces_found=len(query_faces),
             threshold=threshold,
             candidates=[],
@@ -47,7 +52,7 @@ def run(
             run_dir=run_dir,
         )
 
-    raw_response, mode, searches_spent = _load_candidates(
+    raw_response, mode, searches_spent, hosted_url = _load_candidates(
         query_path=query_path,
         image_url=image_url,
         live=live,
@@ -56,16 +61,21 @@ def run(
     )
     candidates = serp_client.parse_results(raw_response)[:top_n]
     scored = _verify_candidates(query_embedding, candidates, run_dir)
-    matches = rank.rank_candidates(scored, threshold=threshold)
+    ranked = rank.rank_candidates(scored, threshold=threshold)
+    # Enrich verified matches into actionable leads (handle, display_name, etc.).
+    presented = [_present_match(row) for row in ranked]
+    enriched = enrich.enrich_matches(presented)
+
     return _build_report(
         mode=mode,
         searches_spent=searches_spent,
         query_path=query_path,
+        hosted_url=hosted_url,
         faces_found=len(query_faces),
         threshold=threshold,
         candidates=candidates,
         scored=scored,
-        matches=matches,
+        matches=enriched,
         run_dir=run_dir,
     )
 
@@ -77,21 +87,38 @@ def _make_run_dir(out_dir: str) -> str:
     return run_dir
 
 
+def _host_local_image(local_path: str) -> str:
+    """Host a local file to a 1-hour public URL via vendored ImgOps. Returns direct_url."""
+    from face_search.hosting import upload_image as host_upload
+
+    result = host_upload(local_path)
+    return result.direct_url
+
+
 def _load_candidates(query_path, image_url, live, reuse_cache, run_dir):
+    hosted_url: str | None = None
     if reuse_cache:
         with open(reuse_cache, encoding="utf-8") as handle:
-            return json.load(handle), "CACHE_REPLAY", 0
+            return json.load(handle), "CACHE_REPLAY", 0, None
     api_key = serp_client.load_key()
     serp_client.check_quota(api_key)  # raises when quota is exhausted
+
+    # URL-only: resolve the public URL to search with.
     if image_url:
-        raw_response = serp_client.lens_search(api_key, image_url=image_url)
+        search_url = image_url
     else:
-        image_id = serp_client.upload_image(query_path, api_key)
-        raw_response = serp_client.lens_search(api_key, image_id=image_id)
+        hosted_url = _host_local_image(query_path)
+        search_url = hosted_url
+
+    raw_response = serp_client.lens_search(api_key, image_url=search_url)
     raw_path = os.path.join(run_dir, config.RAW_FILENAME)
     with open(raw_path, "w", encoding="utf-8") as handle:
         json.dump(raw_response, handle, indent=2)
-    return raw_response, "LIVE", 1
+    # Persist hosting trace for the 1h expiry window.
+    if hosted_url:
+        with open(os.path.join(run_dir, "hosted_url.txt"), "w", encoding="utf-8") as handle:
+            handle.write(hosted_url + "\n")
+    return raw_response, "LIVE", 1, hosted_url
 
 
 def _verify_candidates(query_embedding, candidates, run_dir) -> list:
@@ -118,7 +145,7 @@ def _verify_candidates(query_embedding, candidates, run_dir) -> list:
 
 
 def _present_match(row: dict) -> dict:
-    return {
+    base = {
         "title": row.get("title"),
         "source": row.get("source"),
         "platform": rank.platform_of(row.get("page_url", "")),
@@ -128,23 +155,24 @@ def _present_match(row: dict) -> dict:
         if row.get("similarity") is not None
         else None,
     }
+    return base
 
 
 def _build_report(
-    mode, searches_spent, query_path, faces_found, threshold,
+    mode, searches_spent, query_path, hosted_url, faces_found, threshold,
     candidates, scored, matches, run_dir,
 ) -> dict:
     report = {
         "mode": mode,
         "searches_spent": searches_spent,
-        "query": {"path": query_path, "faces_found": faces_found},
+        "query": {"path": query_path, "hosted_url": hosted_url, "faces_found": faces_found},
         "threshold": threshold,
         "candidates_found": len(candidates),
         "processed": len(scored),
         "downloaded": sum(1 for row in scored if row.get("downloaded")),
         "with_faces": sum(1 for row in scored if row.get("has_face")),
         "verified": len(matches),
-        "matches": [_present_match(row) for row in matches],
+        "matches": matches,
         "run_dir": run_dir,
     }
     if mode != "DRY_RUN":

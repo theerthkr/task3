@@ -1,0 +1,5 @@
+5 MB limit: 5242880
+validate: OK for small file
+resp_path -> direct: https://imgops.com/1hr-tempcache/a_chandu.png
+resp_path -> ops: https://imgops.com/imgops.com/1hr-tempcache/a_chandu.png
+hosting is URL-only: local files are uploaded to ImgOps -> direct_url -> SerpApi url=

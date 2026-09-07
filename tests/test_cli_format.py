@@ -21,7 +21,7 @@ def test_formats_matches():
         {
             "mode": "LIVE",
             "searches_spent": 1,
-            "query": {"path": "face.jpg", "faces_found": 1},
+            "query": {"path": "face.jpg", "faces_found": 1, "hosted_url": "https://imgops.com/1hr-tempcache/a.jpg"},
             "candidates_found": 2,
             "verified": 1,
             "matches": [
@@ -30,9 +30,15 @@ def test_formats_matches():
                     "platform": "github",
                     "title": "Jane",
                     "page_url": "https://github.com/jane",
+                    "handle": "jane",
+                    "profile_type": "social_profile",
+                    "is_social": True,
+                    "display_name": "Jane",
+                    "company_hint": None,
                 }
             ],
             "run_dir": "runs/demo",
         }
     )
     assert "https://github.com/jane" in text and "0.97" in text
+    assert "social_profile" in text

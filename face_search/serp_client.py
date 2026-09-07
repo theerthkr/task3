@@ -5,8 +5,6 @@ The account check and cached repeats are free, and this module never
 sends no_cache=true so identical repeats serve free cache.
 """
 
-import os
-
 import requests
 
 from face_search import config
@@ -43,34 +41,15 @@ def check_quota(api_key: str) -> dict:
     return data
 
 
-def upload_image(image_path: str, api_key: str) -> str:
-    """Upload a local file to SerpApi, returning the image_id for Lens."""
-    if not os.path.exists(image_path):
-        raise FileNotFoundError(f"Local image file not found: {image_path!r}")
-    with open(image_path, "rb") as handle:
-        response = requests.post(
-            config.SERPAPI_UPLOAD_URL,
-            params={"api_key": api_key},
-            files={"image": handle},
-            timeout=config.REQUEST_TIMEOUT,
-        )
-    if response.status_code != 200:
-        raise RuntimeError(f"SerpApi upload failed: HTTP {response.status_code}")
-    image_id = response.json().get("image_id")
-    if not image_id:
-        raise RuntimeError("SerpApi upload response did not contain image_id.")
-    return image_id
+def lens_search(api_key: str, image_url: str) -> dict:
+    """One Google Lens search = one billed search. URL-only (host first, then search).
 
-
-def lens_search(api_key: str, image_id: str = "", image_url: str = "") -> dict:
-    """One Google Lens search = one billed search. Exactly one of the two inputs."""
-    if bool(image_id) == bool(image_url):
-        raise ValueError("Pass exactly one of image_id or image_url.")
-    params = {"engine": config.LENS_ENGINE, "api_key": api_key}
-    if image_id:
-        params["image_id"] = image_id
-    else:
-        params["url"] = image_url
+    The legacy image_id path is removed to enforce URL-only workflow.
+    Use face_search.hosting.upload_image to host local files.
+    """
+    if not image_url or not image_url.startswith("http"):
+        raise ValueError("lens_search requires a public http(s) image_url.")
+    params = {"engine": config.LENS_ENGINE, "api_key": api_key, "url": image_url}
     response = requests.get(
         config.SERPAPI_SEARCH_URL, params=params, timeout=config.REQUEST_TIMEOUT
     )

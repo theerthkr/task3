@@ -8,7 +8,6 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-SERPAPI_UPLOAD_URL = "https://serpapi.com/image"
 SERPAPI_SEARCH_URL = "https://serpapi.com/search"
 SERPAPI_ACCOUNT_URL = "https://serpapi.com/account.json"
 LENS_ENGINE = "google_lens"
@@ -35,6 +34,15 @@ USER_AGENT = (
 
 FACE_MODEL_PACK = "buffalo_l"
 FACE_DET_SIZE = (640, 640)
+
+# Hosting (vendored ImgOps — SSOT lives in hosting/imgops_uploader/config.py)
+try:
+    from face_search.hosting.imgops_uploader.config import CACHE_TTL_HOURS as _HOST_TTL
+
+    HOST_TTL_HOURS = _HOST_TTL
+except Exception:
+    HOST_TTL_HOURS = 1
+HOST_PROVIDER = "imgops.com"
 
 QUERY_FILENAME = "query.jpg"
 RAW_FILENAME = "lens_raw.json"
