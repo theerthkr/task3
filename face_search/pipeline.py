@@ -1,17 +1,18 @@
-"""Orchestration only: ingest, host to URL, search (or replay), verify, rank, enrich, report.
-
-Search-spend accounting is explicit: the returned report always carries
-searches_spent (0 for dry-run and cache replay, 1 for a live search).
+"""Orchestration only: ingest, host to URL, search (or replay), verify, rank, report.
 
 URL-only contract: local files are hosted via imgops_uploader to a 1-hour
-public URL; SerpApi is always called with url= (never image_id / direct upload).
+public URL; SerpApi is always called with url= (never image_id).
+
+This pipeline takes ALL SerpApi hits at once — no top_n slicing by default —
+runs face extraction + cosine comparison on every candidate, and ranks
+everyone (full list + verified subset) into a single JSON document.
 """
 
 import json
 import os
 from datetime import datetime, timezone
 
-from face_search import config, enrich, faces, images, rank, serp_client
+from face_search import config, faces, images, rank, serp_client
 
 
 def run(
@@ -27,7 +28,6 @@ def run(
         raise ValueError(f"top_n must be 0 or more, got {top_n}.")
     run_dir = _make_run_dir(out_dir)
 
-    # Always resolve query to a local file for embedding, but also ensure we have a public URL.
     query_path = images.fetch_query_image(
         image=image,
         image_url=image_url,
@@ -48,7 +48,8 @@ def run(
             threshold=threshold,
             candidates=[],
             scored=[],
-            matches=[],
+            ranked_all=[],
+            verified=[],
             run_dir=run_dir,
         )
 
@@ -59,12 +60,19 @@ def run(
         reuse_cache=reuse_cache,
         run_dir=run_dir,
     )
-    candidates = serp_client.parse_results(raw_response)[:top_n]
+    # Take ALL hits at once (top_n == 0 means no limit; otherwise cap).
+    all_candidates = serp_client.parse_results(raw_response)
+    candidates = all_candidates if top_n == 0 else all_candidates[:top_n]
+
     scored = _verify_candidates(query_embedding, candidates, run_dir)
-    ranked = rank.rank_candidates(scored, threshold=threshold)
-    # Enrich verified matches into actionable leads (handle, display_name, etc.).
-    presented = [_present_match(row) for row in ranked]
-    enriched = enrich.enrich_matches(presented)
+
+    # Rank everyone (no threshold) + verified subset (threshold + social boost).
+    ranked_all = rank.rank_all(scored)
+    verified = rank.rank_candidates(scored, threshold=threshold)
+
+    # Present ranked_all as the main ranked document (source + similarity for each).
+    ranked_presented = [_present_ranked(row) for row in ranked_all]
+    verified_presented = [_present_ranked(row) for row in verified]
 
     return _build_report(
         mode=mode,
@@ -75,7 +83,8 @@ def run(
         threshold=threshold,
         candidates=candidates,
         scored=scored,
-        matches=enriched,
+        ranked_all=ranked_presented,
+        verified=verified_presented,
         run_dir=run_dir,
     )
 
@@ -144,24 +153,34 @@ def _verify_candidates(query_embedding, candidates, run_dir) -> list:
     return scored
 
 
-def _present_match(row: dict) -> dict:
-    base = {
+def _present_ranked(row: dict) -> dict:
+    """One row of the ranked document — includes source + similarity + flags."""
+    return {
+        "position": row.get("position"),
         "title": row.get("title"),
         "source": row.get("source"),
         "platform": rank.platform_of(row.get("page_url", "")),
         "page_url": row.get("page_url"),
         "image_url": row.get("image_url"),
-        "similarity": round(row["similarity"], 4)
-        if row.get("similarity") is not None
-        else None,
+        "thumbnail_url": row.get("thumbnail_url"),
+        "match_kind": row.get("match_kind"),
+        "engine": row.get("engine"),
+        "downloaded": row.get("downloaded"),
+        "has_face": row.get("has_face"),
+        "similarity": round(row["similarity"], 4) if row.get("similarity") is not None else None,
+        "verified": bool(row.get("has_face") and row.get("similarity") is not None and row.get("similarity") >= 0),  # placeholder, real verified derived from rank_candidates
     }
-    return base
 
 
 def _build_report(
     mode, searches_spent, query_path, hosted_url, faces_found, threshold,
-    candidates, scored, matches, run_dir,
+    candidates, scored, ranked_all, verified, run_dir,
 ) -> dict:
+    # Recompute verified flag per threshold for the ranked rows
+    for row in ranked_all:
+        sim = row.get("similarity")
+        row["verified"] = bool(row.get("has_face") and sim is not None and sim >= threshold)
+
     report = {
         "mode": mode,
         "searches_spent": searches_spent,
@@ -171,8 +190,9 @@ def _build_report(
         "processed": len(scored),
         "downloaded": sum(1 for row in scored if row.get("downloaded")),
         "with_faces": sum(1 for row in scored if row.get("has_face")),
-        "verified": len(matches),
-        "matches": matches,
+        "verified": len(verified),
+        "ranked": ranked_all,
+        "matches": verified,  # backwards-compat alias for verified subset
         "run_dir": run_dir,
     }
     if mode != "DRY_RUN":

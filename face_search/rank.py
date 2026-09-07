@@ -42,3 +42,32 @@ def rank_candidates(items: list, threshold: float = config.DEFAULT_THRESHOLD) ->
         best_by_url.values(),
         key=lambda item: (not is_social(item.get("page_url", "")), -item["similarity"]),
     )
+
+
+def rank_all(items: list) -> list:
+    """Rank everyone by similarity (verified first, then rest), no threshold filter.
+
+    Returns a new list sorted by:
+      1. has_face (true first)
+      2. similarity descending (None last)
+      3. social profiles first within equal similarity
+    Deduplicates by page_url keeping best similarity.
+    """
+    best_by_url: dict = {}
+    for item in items:
+        url = item.get("page_url", "")
+        cur = best_by_url.get(url)
+        sim = item.get("similarity")
+        cur_sim = cur.get("similarity") if cur else None
+        # keep the entry with highest similarity (None is lowest)
+        if cur is None:
+            best_by_url[url] = item
+        elif sim is not None and (cur_sim is None or sim > cur_sim):
+            best_by_url[url] = item
+    def _key(row):
+        has_face = 0 if row.get("has_face") else 1
+        sim = row.get("similarity")
+        sim_key = -(sim if sim is not None else -1.0)
+        social_key = 0 if is_social(row.get("page_url", "")) else 1
+        return (has_face, sim_key, social_key)
+    return sorted(best_by_url.values(), key=_key)

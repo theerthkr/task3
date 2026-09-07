@@ -35,23 +35,17 @@ def format_report(report: dict) -> str:
         lines.append(f"Query face: detected in {report['query']['path']}")
         lines.append("No matches yet — rerun with --live or --reuse-cache.")
     else:
+        ranked = report.get("ranked") or report.get("matches") or []
         lines.append(
-            f"Candidates: {report['candidates_found']} | Verified: {report['verified']}"
+            f"Candidates: {report['candidates_found']} | Ranked: {len(ranked)} | Verified: {report['verified']}"
         )
-        for position, match in enumerate(report["matches"][:5], 1):
-            handle = f" @{match.get('handle')}" if match.get("handle") else ""
-            name = f" — {match.get('display_name')}" if match.get("display_name") else ""
-            ptype = match.get("profile_type") or ("social_profile" if match.get("is_social") else "web_page")
+        for position, row in enumerate(ranked[:10], 1):
             lines.append(
-                f"[{position}] {match.get('similarity')} {match.get('platform')}{handle}{name} | {ptype} | {match.get('title')}"
+                f"[{position}] sim={row.get('similarity')} has_face={row.get('has_face')} verified={row.get('verified')} {row.get('platform')} | {row.get('title')}"
             )
-            lines.append(f"    {match.get('page_url')}")
-            if match.get("company_hint"):
-                lines.append(f"    company hint: {match['company_hint']}")
-            if match.get("is_social"):
-                lines.append(f"    -> social profile lead: {match.get('platform')}/{match.get('handle')}")
-        if report["verified"] and not any(m.get("is_social") for m in report["matches"]):
-            lines.append("Note: no social profile among verified matches — best web-page match shown above.")
+            lines.append(f"    source: {row.get('source')} | {row.get('page_url')}")
+        if ranked and report["verified"] == 0:
+            lines.append("Note: ranked list shows all candidates sorted by similarity — none crossed threshold.")
     lines.append(f"Run dir: {report['run_dir']}")
     return "\n".join(lines)
 

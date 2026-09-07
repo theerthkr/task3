@@ -12,7 +12,7 @@ SERPAPI_SEARCH_URL = "https://serpapi.com/search"
 SERPAPI_ACCOUNT_URL = "https://serpapi.com/account.json"
 LENS_ENGINE = "google_lens"
 
-DEFAULT_TOP_N = 10
+DEFAULT_TOP_N = 0  # 0 = no limit: ingest all SerpApi hits at once
 DEFAULT_THRESHOLD = 0.45
 REQUEST_TIMEOUT = 30
 DOWNLOAD_TIMEOUT = 10

@@ -24,21 +24,30 @@ def test_formats_matches():
             "query": {"path": "face.jpg", "faces_found": 1, "hosted_url": "https://imgops.com/1hr-tempcache/a.jpg"},
             "candidates_found": 2,
             "verified": 1,
+            "ranked": [
+                {
+                    "similarity": 0.97,
+                    "platform": "github",
+                    "title": "Jane",
+                    "source": "GitHub",
+                    "page_url": "https://github.com/jane",
+                    "has_face": True,
+                    "verified": True,
+                }
+            ],
             "matches": [
                 {
                     "similarity": 0.97,
                     "platform": "github",
                     "title": "Jane",
+                    "source": "GitHub",
                     "page_url": "https://github.com/jane",
-                    "handle": "jane",
-                    "profile_type": "social_profile",
-                    "is_social": True,
-                    "display_name": "Jane",
-                    "company_hint": None,
+                    "has_face": True,
+                    "verified": True,
                 }
             ],
             "run_dir": "runs/demo",
         }
     )
     assert "https://github.com/jane" in text and "0.97" in text
-    assert "social_profile" in text
+    assert "Verified: 1" in text
