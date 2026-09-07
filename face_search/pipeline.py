@@ -23,6 +23,9 @@ def run(
     live: bool = False,
     reuse_cache: str = "",
     out_dir: str = "runs",
+    anchor: bool = False,
+    anchor_top_k: int = 1,
+    llm_model: str = "",
 ) -> dict:
     if top_n < 0:
         raise ValueError(f"top_n must be 0 or more, got {top_n}.")
@@ -39,7 +42,7 @@ def run(
     query_embedding = query_faces[0]
 
     if not live and not reuse_cache:
-        return _build_report(
+        report = _build_report(
             mode="DRY_RUN",
             searches_spent=0,
             query_path=query_path,
@@ -52,6 +55,19 @@ def run(
             verified=[],
             run_dir=run_dir,
         )
+        if anchor:
+            try:
+                from face_search.blockchain_anchor import anchor_report
+
+                report = anchor_report(report, top_k=anchor_top_k)
+                # persist enriched DRY_RUN if anchor was requested (for judge demo)
+                import json
+
+                with open(os.path.join(report["run_dir"], config.REPORT_FILENAME), "w", encoding="utf-8") as handle:
+                    json.dump(report, handle, indent=2)
+            except Exception as exc:
+                report.setdefault("blockchain", {})["error"] = str(exc)
+        return report
 
     raw_response, mode, searches_spent, hosted_url = _load_candidates(
         query_path=query_path,
@@ -77,12 +93,12 @@ def run(
     # LLM judge (opt-in via OPENROUTER_API_KEY): is each hit an actual social profile?
     # Judge verified hits, else top ranked, so social pages like bebee still get verdicts.
     to_judge = verified_presented or ranked_presented[:5]
-    verdicts = {v["page_url"]: v["llm"] for v in llm_judge.judge_matches(to_judge)}
+    verdicts = {v["page_url"]: v["llm"] for v in llm_judge.judge_matches(to_judge, model=llm_model or llm_judge.DEFAULT_MODEL)}
     for row in ranked_presented + verified_presented:
         if row.get("page_url") in verdicts:
             row["llm"] = verdicts[row["page_url"]]
 
-    return _build_report(
+    report = _build_report(
         mode=mode,
         searches_spent=searches_spent,
         query_path=query_path,
@@ -95,6 +111,25 @@ def run(
         verified=verified_presented,
         run_dir=run_dir,
     )
+
+    # Blockchain anchoring (opt-in --anchor): hash verified match -> store on Sepolia/local
+    # Lazy, isolated in face_search.blockchain_anchor so hashing SOC stays separate.
+    if anchor:
+        try:
+            from face_search.blockchain_anchor import anchor_report
+
+            report = anchor_report(report, top_k=anchor_top_k)
+            # persist enriched report (with blockchain receipts) back to disk
+            if report.get("mode") != "DRY_RUN":
+                import json
+
+                with open(os.path.join(report["run_dir"], config.REPORT_FILENAME), "w", encoding="utf-8") as handle:
+                    json.dump(report, handle, indent=2)
+        except Exception as exc:
+            # never fail pipeline on anchor error – attach error note
+            report.setdefault("blockchain", {})["error"] = str(exc)
+
+    return report
 
 
 def _make_run_dir(out_dir: str) -> str:

@@ -13,8 +13,20 @@ import requests
 from face_search import config, rank
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-DEFAULT_MODEL = "openai/gpt-4o-mini"
+DEFAULT_MODEL = "meta-llama/llama-3.3-70b-instruct:free"
 TIMEOUT = 30
+
+# SSOT for model choice (UI selectbox + docs). Free :free models rotate —
+# confirm live at https://openrouter.ai/models. Our verdict call is tiny
+# (~600 in / ~150 out tokens), so any of these is plenty.
+FREE_MODELS = (
+    {"id": "meta-llama/llama-3.3-70b-instruct:free", "context": "128K",
+     "note": "Default. Strong instruction-following, reliable JSON."},
+    {"id": "google/gemini-2.0-flash-exp:free", "context": "1M",
+     "note": "Huge context for long page excerpts; fast."},
+    {"id": "deepseek/deepseek-r1:free", "context": "163K",
+     "note": "Reasoning model; slower but good on ambiguous pages."},
+)
 
 SYSTEM_PROMPT = (
     "You verify reverse-image-search matches. Given a web page that contains a "

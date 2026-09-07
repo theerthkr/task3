@@ -55,7 +55,7 @@ c1, c2, c3 = st.columns([1, 1, 0.55])
 with c1:
     serp_key = st.text_input("SERP API Key", type="password", placeholder="serpapi key", help="Used as SERPAPI_KEY for Lens")
 with c2:
-    openrouter_key = st.text_input("OpenRouter API Key", type="password", placeholder="openrouter key", help="For future LLM enrichment")
+    openrouter_key = st.text_input("OpenRouter API Key (optional)", type="password", placeholder="sk-or-… (enables LLM verdicts)", help="Paste a key from openrouter.ai/keys to enable LLM social-profile verdicts. Without it, verdicts use the deterministic fallback.")
 with c3:
     st.markdown('<div style="height:22px"></div>', unsafe_allow_html=True)
     headless = st.toggle("Headless browser", value=True, help="When browser automation exists, headless vs headed. Stored, no-op today (core is requests-only).")
@@ -65,6 +65,21 @@ if serp_key:
 if openrouter_key:
     os.environ["OPENROUTER_API_KEY"] = openrouter_key.strip()
 st.session_state["headless"] = headless
+
+# LLM model choice (free :free models) + key-missing hint
+from face_search.llm_judge import FREE_MODELS
+_llm_ids = [m["id"] for m in FREE_MODELS]
+_llm_labels = {m["id"]: f"{m['id']}  ·  ctx {m['context']}  ·  {m['note']}" for m in FREE_MODELS}
+c4, c5 = st.columns([1.4, 1])
+with c4:
+    llm_model = st.selectbox("LLM model (OpenRouter free)", options=_llm_ids, format_func=lambda i: _llm_labels[i], help="Free models at openrouter.ai/models — list rotates, confirm there. Verdict call is tiny (~600 in/~150 out tokens).")
+with c5:
+    st.markdown('<div style="height:22px"></div>', unsafe_allow_html=True)
+    if openrouter_key and openrouter_key.strip():
+        st.markdown('<div class="cyber-badge cyber-ok">LLM verdicts ON</div>', unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="cyber-badge cyber-warn">No OpenRouter key — LLM verdicts OFF, deterministic fallback</div>', unsafe_allow_html=True)
+        st.caption("Free keys at openrouter.ai/keys · free models at openrouter.ai/models")
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 def _face_bboxes_for_preview(img_path: str):
@@ -250,9 +265,9 @@ if go:
             with st.spinner("Hosting → Lens → verifying 10 candidates…"):
                 # if link was used, pass image_url directly (no re-host)
                 if link_path and query_path == link_path:
-                    report = pipeline_run(image="", image_url=link_in.strip(), top_n=10, live=True)
+                    report = pipeline_run(image="", image_url=link_in.strip(), top_n=10, live=True, llm_model=llm_model)
                 else:
-                    report = pipeline_run(image=query_path, image_url="", top_n=10, live=True)
+                    report = pipeline_run(image=query_path, image_url="", top_n=10, live=True, llm_model=llm_model)
             st.session_state.report = report
             st.session_state.hosted_url = report.get("query", {}).get("hosted_url")
         except ImgOpsValidationError as e:
