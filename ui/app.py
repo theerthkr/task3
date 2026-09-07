@@ -135,28 +135,27 @@ def _validate_link(url: str) -> tuple[str | None, str | None]:
         return None, "Link unreachable or not an image — check URL."
     return tf.name, None
 
-# ── input: browse + paste (mutually exclusive, link takes precedence if both) ─
+# ── input: browse on top, paste-link field below (link takes precedence if both) ─
 st.markdown('<div class="cyber-panel">', unsafe_allow_html=True)
-st.markdown('<div style="font-family:Share Tech Mono; font-size:12px; letter-spacing:0.12em; color:#00E5FF;">⚡ INPUT — BROWSE OR PASTE LINK</div>', unsafe_allow_html=True)
-tab_browse, tab_link = st.tabs(["▣ Browse image", "↗ Paste link"])
+st.markdown('<div style="font-family:Share Tech Mono; font-size:12px; letter-spacing:0.12em; color:#00E5FF;">⚡ INPUT — BROWSE IMAGE</div>', unsafe_allow_html=True)
 browse_path, link_path = None, None
 browse_err, link_err = None, None
 
-with tab_browse:
-    up = st.file_uploader("Drop PNG/JPG/WEBP (≤5 MB)", type=["png","jpg","jpeg","webp"], label_visibility="collapsed")
-    if up is not None:
-        browse_path, browse_err = _validate_and_stage_file(up)
-        if browse_err:
-            st.markdown(f'<div class="cyber-badge cyber-err">{browse_err}</div>', unsafe_allow_html=True)
-with tab_link:
-    link_in = st.text_input("Image URL", placeholder="https://...", label_visibility="collapsed")
-    if link_in.strip():
-        with st.spinner("Checking link…"):
-            link_path, link_err = _validate_link(link_in)
-        if link_err:
-            st.markdown(f'<div class="cyber-badge cyber-err">{link_err}</div>', unsafe_allow_html=True)
-        elif link_path:
-            st.markdown('<div class="cyber-badge cyber-ok">Link OK — image reachable</div>', unsafe_allow_html=True)
+up = st.file_uploader("Drop PNG/JPG/WEBP (≤5 MB)", type=["png","jpg","jpeg","webp"], label_visibility="collapsed")
+if up is not None:
+    browse_path, browse_err = _validate_and_stage_file(up)
+    if browse_err:
+        st.markdown(f'<div class="cyber-badge cyber-err">{browse_err}</div>', unsafe_allow_html=True)
+
+st.markdown('<div style="font-family:Share Tech Mono; font-size:12px; letter-spacing:0.12em; color:#00E5FF; margin-top:10px;">↗ OR PASTE LINK</div>', unsafe_allow_html=True)
+link_in = st.text_input("Image URL", placeholder="https://…", label_visibility="collapsed")
+if link_in.strip():
+    with st.spinner("Checking link…"):
+        link_path, link_err = _validate_link(link_in)
+    if link_err:
+        st.markdown(f'<div class="cyber-badge cyber-err">{link_err}</div>', unsafe_allow_html=True)
+    elif link_path:
+        st.markdown('<div class="cyber-badge cyber-ok">Link OK — image reachable</div>', unsafe_allow_html=True)
 st.markdown('</div>', unsafe_allow_html=True)
 
 # decide query path (link precedence)
@@ -218,7 +217,7 @@ else:
 st.markdown('<div style="height:12px"></div>', unsafe_allow_html=True)
 col_go, col_info = st.columns([0.38, 0.62])
 with col_go:
-    go = st.button("▶ SEARCH — TOP 10", type="primary", disabled=not can_proceed, use_container_width=True)
+    go = st.button("▶ SEARCH", type="primary", disabled=not can_proceed, use_container_width=True)
 with col_info:
     st.markdown('<div style="color:#7a8a9e; font-size:11px; padding-top:8px;">URL-only · Serp Lens · 1 search credit · Top 10 ranked</div>', unsafe_allow_html=True)
 
