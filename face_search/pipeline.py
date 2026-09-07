@@ -90,13 +90,74 @@ def run(
     ranked_presented = [_present_ranked(row) for row in ranked_all]
     verified_presented = [_present_ranked(row) for row in verified]
 
-    # LLM judge (opt-in via OPENROUTER_API_KEY): is each hit an actual social profile?
-    # Judge verified hits, else top ranked, so social pages like bebee still get verdicts.
-    to_judge = verified_presented or ranked_presented[:5]
+    # LLM judge: pass ANY profile-like link immediately (github/bebee/bold.pro etc), show all similar
+    # Judge verified hits + top ranked (covers famous + non-famous profile pages)
+    to_judge = verified_presented + [r for r in ranked_presented if r not in verified_presented][:5]
+    to_judge = to_judge[:10]  # show up to 10 profiles if multiple similar
     verdicts = {v["page_url"]: v["llm"] for v in llm_judge.judge_matches(to_judge, model=llm_model or llm_judge.DEFAULT_MODEL)}
     for row in ranked_presented + verified_presented:
         if row.get("page_url") in verdicts:
             row["llm"] = verdicts[row["page_url"]]
+    # Also attach fallback for any ranked that looks like profile but wasn't judged (so UI can still show)
+    for row in ranked_presented:
+        if "llm" not in row:
+            # deterministic fallback: if platform is profile domain, mark as profile even without LLM
+            plat = row.get("platform") or rank.platform_of(row.get("page_url", ""))
+            page_url = (row.get("page_url") or "").lower()
+            is_profile = plat != "web" or any(h in page_url for h in config.PROFILE_PATH_HINTS) or any(d in page_url for d in config.PROFILE_DOMAINS)
+            if is_profile:
+                row["llm"] = llm_judge._fallback(row, reason="profile domain fallback")
+
+    # Finalized profiles: verified face matches that LLM (or fallback) says is profile -> pass immediately, show all similar
+    finalized = [r for r in verified_presented if r.get("llm", {}).get("is_social_profile")]
+    if not finalized and verified_presented:
+        finalized = verified_presented[:5]
+    # If still none but ranked has profile-like (e.g., github/bebee) — show them so LLM/social is always visible, even below threshold
+    if not finalized:
+        prof_ranked = [r for r in ranked_presented if r.get("llm", {}).get("is_social_profile")]
+        if prof_ranked:
+            finalized = prof_ranked[:5]
+    finalized = finalized[:10]
+
+    # Aggregate LLM errors for visible pipeline warning (not silent)
+    llm_errors = [r.get("llm", {}) for r in ranked_presented + verified_presented if not r.get("llm", {}).get("llm_used", True) and r.get("llm")]
+    real_fails = [e for e in llm_errors if any(k in (e.get("reason") or "") for k in ("HTTP 401", "HTTP 404", "HTTP 429", "HTTP 402", "timeout", "bad JSON", "llm error"))]
+    _base_for_key = os.getenv("OPENROUTER_BASE_URL", "").strip() or os.getenv("LLM_BASE_URL", "").strip() or os.getenv("OPENAI_BASE_URL", "").strip()
+    _is_local = "localhost" in _base_for_key or "127.0.0.1" in _base_for_key
+    has_key = bool(os.getenv("OPENROUTER_API_KEY", "").strip() or os.getenv("OPENAI_API_KEY", "").strip() or _is_local)
+    llm_status = "ok"
+    llm_note = ""
+    if has_key and real_fails:
+        # important pipeline failing -> visible
+        sample = real_fails[0].get("reason", "")
+        if "404" in sample:
+            llm_status = "error_404"
+            llm_note = f"LLM judge failing: {sample} — free models rotate, change model in UI (try google/gemini-2.0-flash-exp:free)"
+        elif "401" in sample:
+            llm_status = "error_401"
+            llm_note = f"LLM judge failing: {sample} — check OPENROUTER_API_KEY (not SERPAPI_KEY) at openrouter.ai/keys"
+        elif "429" in sample:
+            llm_status = "error_429"
+            llm_note = f"LLM judge rate-limited (429) — wait 60s or switch model/add credits"
+        elif "timeout" in sample.lower():
+            llm_status = "error_timeout"
+            llm_note = f"LLM judge timeout — OpenRouter overloaded, retry SEARCH"
+        elif "bad JSON" in sample:
+            llm_status = "error_json"
+            llm_note = f"LLM bad JSON — model returned invalid JSON, switch model"
+        else:
+            llm_status = "error"
+            llm_note = f"LLM judge failing: {sample} — results are fallback heuristic only"
+    elif not has_key and llm_errors:
+        llm_status = "fallback_no_key"
+        llm_note = "LLM disabled — no OPENROUTER_API_KEY, deterministic fallback active (still passes github/bebee/bold.pro immediately). Add free key at openrouter.ai/keys for better verdicts."
+
+    # Ensure top ranked profile-like still shown even when LLM failed (profile-format fallback)
+    if llm_status.startswith("error") and not finalized:
+        # show top ranked that looked like profile via fallback, even if not verified
+        fallback_top = [r for r in ranked_presented if r.get("llm", {}).get("is_social_profile")]
+        if fallback_top:
+            finalized = fallback_top[:5]
 
     report = _build_report(
         mode=mode,
@@ -111,6 +172,11 @@ def run(
         verified=verified_presented,
         run_dir=run_dir,
     )
+    report["finalized_profiles"] = finalized
+    report["llm_model"] = llm_model or llm_judge.DEFAULT_MODEL
+    report["llm_status"] = llm_status
+    report["llm_note"] = llm_note
+    report["llm_fallback_count"] = len(llm_errors)
 
     # Blockchain anchoring (opt-in --anchor): hash verified match -> store on Sepolia/local
     # Lazy, isolated in face_search.blockchain_anchor so hashing SOC stays separate.

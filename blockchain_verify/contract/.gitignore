@@ -1,0 +1,6 @@
+# Deployed metadata contains chain state – ignore local vs Sepolia outputs
+# Keep .sol source tracked, ignore generated JSON (optional)
+# Uncomment to ignore:
+# *.json
+# For hackathon demo, we allow committing Sepolia address file;
+# but NEVER commit a file containing a full Alchemy/Infura key (now redacted).

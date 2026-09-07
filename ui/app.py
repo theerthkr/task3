@@ -1,331 +1,233 @@
-"""Streamlit UI — cyber black, minimal, strictly separate from face_search core.
-
-Only imports inward: face_search.*. No core file imports ui.
-"""
+"""Streamlit UI — two clean rows: ROW 1 Data, ROW 2 Blockchain. Strictly separate from face_search core."""
 
 from __future__ import annotations
-
 import sys
 from pathlib import Path
-
-# Make project root importable when Streamlit runs as `streamlit run ui/app.py`
-# Streamlit adds the script dir (ui/) to sys.path, not the project root, so
-# `import face_search` would fail without this.
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
+if str(_PROJECT_ROOT) not in sys.path: sys.path.insert(0, str(_PROJECT_ROOT))
 
-import io
-import os
-import tempfile
-
+import io, os, tempfile, json
 import streamlit as st
 from PIL import Image, ImageDraw
-
 from face_search.hosting.imgops_uploader.config import DEFAULT_MAX_SIZE_BYTES as HOST_MAX_BYTES
 from face_search import faces
 from face_search.hosting.imgops_uploader.exceptions import ImgOpsValidationError
-
 from ui.theme import CYBER_CSS
+from ui.blockchain_panel import render_blockchain_config_panel
 
-# ── page ─────────────────────────────────────────────────────────────────────
 st.set_page_config(page_title="FACE SEARCH — CYBER", page_icon="◉", layout="centered", initial_sidebar_state="collapsed")
 st.markdown(CYBER_CSS, unsafe_allow_html=True)
+st.markdown('<div class="cyber-panel cyber-grid" style="text-align:center; margin-bottom:14px;"><div style="font-family:Share Tech Mono; font-size:22px; letter-spacing:0.18em;" class="cyber-title">◉ FACE SEARCH — CYBER</div><div style="color:#7a8a9e; font-size:11px; letter-spacing:0.12em; margin-top:4px;">URL-ONLY · SERP LENS · INSIGHTFACE · TOP 10 · 1H HOST</div></div>', unsafe_allow_html=True)
 
-st.markdown("""
-<div class="cyber-panel cyber-grid" style="text-align:center; margin-bottom:14px;">
-  <div style="font-family:'Share Tech Mono'; font-size:22px; letter-spacing:0.18em;" class="cyber-title">◉ FACE SEARCH — CYBER</div>
-  <div style="color:#7a8a9e; font-size:11px; letter-spacing:0.12em; margin-top:4px;">URL-ONLY · SERP LENS · INSIGHTFACE · TOP 10 · 1H HOST</div>
-</div>
-""", unsafe_allow_html=True)
+if "report" not in st.session_state: st.session_state.report=None
 
-# ── session ──────────────────────────────────────────────────────────────────
-if "query_path" not in st.session_state:
-    st.session_state.query_path = None
-if "query_bboxes" not in st.session_state:
-    st.session_state.query_bboxes = []
-if "hosted_url" not in st.session_state:
-    st.session_state.hosted_url = None
-if "report" not in st.session_state:
-    st.session_state.report = None
+# ── ROW 1 — DATA ───────────────────────────────────────────────────────────────
+st.markdown('<div class="cyber-panel">', unsafe_allow_html=True)
+st.markdown('<div style="font-family:Share Tech Mono; font-size:12px; letter-spacing:0.12em; color:#00E5FF;">━━ ROW 1 — DATA (SEARCH) ━━</div>', unsafe_allow_html=True)
 
-# ── settings row: 2 key fields + headless toggle ────────────────────────────
-st.markdown('<div style="height:6px"></div>', unsafe_allow_html=True)
-c1, c2, c3 = st.columns([1, 1, 0.55])
+# Keys: SERP (required) + OpenRouter (optional, needed for LLM)
+c1, c2, c3 = st.columns([1,1,0.7])
 with c1:
-    serp_key = st.text_input("SERP API Key", type="password", placeholder="serpapi key", help="Used as SERPAPI_KEY for Lens")
+    serp_key = st.text_input("SERP API Key (optional)", type="password", placeholder="leave empty — bundled key will be used", help="SERP API is already bundled in the codebase (api_key.json). Leave empty to use it. Only paste your own if you hit quota/429 or it stops working. Stored as SERPAPI_KEY.")
 with c2:
-    openrouter_key = st.text_input("OpenRouter API Key (optional)", type="password", placeholder="sk-or-… (enables LLM verdicts)", help="Paste a key from openrouter.ai/keys to enable LLM social-profile verdicts. Without it, verdicts use the deterministic fallback.")
+    openrouter_key = st.text_input("OpenRouter API Key *", type="password", placeholder="sk-or-… required for LLM", help="LLM uses ONLY OpenRouter (openrouter.ai/keys — free :free models). Pick any model below. Without this, fallback heuristics still work but are weaker.")
 with c3:
     st.markdown('<div style="height:22px"></div>', unsafe_allow_html=True)
-    headless = st.toggle("Headless browser", value=True, help="When browser automation exists, headless vs headed. Stored, no-op today (core is requests-only).")
+    if openrouter_key and openrouter_key.strip(): st.markdown('<div class="cyber-badge cyber-ok">LLM ON</div>', unsafe_allow_html=True)
+    else: st.markdown('<div class="cyber-badge cyber-warn">LLM needs key</div>', unsafe_allow_html=True); st.caption("⚠️ LLM takes 20-40s — leave page open after SEARCH.")
+if serp_key and serp_key.strip(): os.environ["SERPAPI_KEY"]=serp_key.strip()
+# else: keep bundled api_key.json — no env override, SerpApi will use bundled key
+if openrouter_key and openrouter_key.strip(): os.environ["OPENROUTER_API_KEY"]=openrouter_key.strip()
 
-if serp_key:
-    os.environ["SERPAPI_KEY"] = serp_key.strip()
-if openrouter_key:
-    os.environ["OPENROUTER_API_KEY"] = openrouter_key.strip()
-st.session_state["headless"] = headless
+# LLM model — searchable, fetches all from OpenRouter
+from face_search.llm_judge import FREE_MODELS, fetch_models, DEFAULT_MODEL
+try:
+    _all_models = fetch_models()
+except Exception:
+    _all_models = [{"id": m["id"], "name": m["id"], "is_free": True, "context_length": m["context"], "raw": m} for m in FREE_MODELS]
 
-# LLM model choice (free :free models) + key-missing hint
-from face_search.llm_judge import FREE_MODELS
-_llm_ids = [m["id"] for m in FREE_MODELS]
-_llm_labels = {m["id"]: f"{m['id']}  ·  ctx {m['context']}  ·  {m['note']}" for m in FREE_MODELS}
-c4, c5 = st.columns([1.4, 1])
-with c4:
-    llm_model = st.selectbox("LLM model (OpenRouter free)", options=_llm_ids, format_func=lambda i: _llm_labels[i], help="Free models at openrouter.ai/models — list rotates, confirm there. Verdict call is tiny (~600 in/~150 out tokens).")
-with c5:
-    st.markdown('<div style="height:22px"></div>', unsafe_allow_html=True)
-    if openrouter_key and openrouter_key.strip():
-        st.markdown('<div class="cyber-badge cyber-ok">LLM verdicts ON</div>', unsafe_allow_html=True)
-    else:
-        st.markdown('<div class="cyber-badge cyber-warn">No OpenRouter key — LLM verdicts OFF, deterministic fallback</div>', unsafe_allow_html=True)
-        st.caption("Free keys at openrouter.ai/keys · free models at openrouter.ai/models")
+# Search filter
+m_search = st.text_input("🔍 Search models (type to filter, e.g. llama, gemini, free, 128k)", placeholder="leave empty for free top picks", help="Fetches live from https://openrouter.ai/api/v1/models — all models, free first.")
+if m_search.strip():
+    q = m_search.strip().lower()
+    _filtered = [m for m in _all_models if q in m["id"].lower() or q in m["name"].lower()]
+else:
+    _filtered = _all_models
 
-# ── helpers ──────────────────────────────────────────────────────────────────
-def _face_bboxes_for_preview(img_path: str):
-    """Return list of bboxes [x1,y1,x2,y2] using InsightFace without full pipeline."""
-    try:
-        from insightface.app import FaceAnalysis
-        # reuse faces._get_app but also get raw faces with bbox
-        app = faces._get_app()
-        import cv2
-        img = cv2.imread(img_path)
-        if img is None:
-            return []
-        raw = app.get(img)
-        return [f.bbox for f in raw]
-    except Exception:
-        return []
+def _m_label(m):
+    free = "✓ FREE" if m.get("is_free") else "PAID"
+    ctx = m.get("context_length") or "?"
+    return f"{m['id']} · {free} · ctx {ctx}"
 
-def _draw_facebox(pil_img: Image.Image, bboxes) -> Image.Image:
-    if not bboxes:
-        return pil_img
-    draw = ImageDraw.Draw(pil_img)
-    w, h = pil_img.size
-    for (x1, y1, x2, y2) in bboxes:
-        # map from original cv2 coords: assume pil size == cv2 size (we saved same file)
-        x1, y1, x2, y2 = map(int, (x1, y1, x2, y2))
-        # cyber neon box
-        for off, color, width in [(0, "#00E5FF", 2), (1, "rgba(0,229,255,0.25)", 6)]:
-            pad = off
-            # need rgba for outer glow if using RGBA image
-        draw.rectangle([x1, y1, x2, y2], outline="#00E5FF", width=3)
-        # corner ticks
-        tick = 14
-        for (x, y, dx, dy) in [(x1,y1,1,1),(x2,y1,-1,1),(x1,y2,1,-1),(x2,y2,-1,-1)]:
-            draw.line([x, y, x+dx*tick, y], fill="#00E5FF", width=2)
-            draw.line([x, y, x, y+dy*tick], fill="#00E5FF", width=2)
-    return pil_img
+try:
+    _def_idx = next(i for i, m in enumerate(_filtered) if m["id"] == DEFAULT_MODEL)
+except StopIteration:
+    _def_idx = 0
 
-def _validate_and_stage_file(uploaded) -> tuple[str | None, str | None]:
-    """Return (temp_path, error)."""
-    if uploaded is None:
-        return None, None
-    data = uploaded.getvalue()
-    if len(data) > HOST_MAX_BYTES:
-        return None, f"File exceeds 5 MB ({len(data)/1024/1024:.2f} MB) — compress or reduce size."
-    # keep extension
-    suffix = Path(uploaded.name).suffix or ".png"
-    tf = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
-    tf.write(data)
-    tf.close()
-    return tf.name, None
+llm_model = st.selectbox(
+    f"LLM model ({len(_filtered)}/{len(_all_models)} shown — live from OpenRouter) — ONLY OpenRouter",
+    options=[m["id"] for m in _filtered],
+    index=_def_idx if _filtered else 0,
+    format_func=lambda mid: next((_m_label(m) for m in _filtered if m["id"] == mid), mid),
+    help="ONLY OpenRouter — pick any :free model (free) or paid if you have credits. Free models rotate; if 404 pick another. ~600 tokens per profile, so 8-10 profiles = 20-40s.",
+)
+st.caption("⏳ LLM takes a lot of time (20-40s for 10 profiles) — keep tab open after SEARCH. Works ONLY via OpenRouter.")
+_selected_is_free = next((m.get("is_free") for m in _filtered if m["id"] == llm_model), True)
+if not _selected_is_free:
+    st.warning("⚠️ You selected a PAID model — needs OpenRouter credits or 402 error. For free, pick a :free model or search 'free'.")
 
-def _thumb_html(run_dir: str, row: dict) -> str:
-    """72px thumb: local downloaded file first, Lens thumbnail hotlink fallback."""
+st.divider()
+# Image input
+st.markdown('<div style="font-family:Share Tech Mono; font-size:12px; color:#00E5FF;">⚡ INPUT — BROWSE OR PASTE LINK</div>', unsafe_allow_html=True)
+
+def _validate_and_stage_file(uploaded):
+    if uploaded is None: return None, None
+    data=uploaded.getvalue()
+    if len(data)>HOST_MAX_BYTES: return None, f"File exceeds 5 MB ({len(data)/1024/1024:.2f} MB)"
+    suffix=Path(uploaded.name).suffix or ".png"
+    tf=tempfile.NamedTemporaryFile(delete=False, suffix=suffix); tf.write(data); tf.close(); return tf.name, None
+def _thumb_html(run_dir, row):
     import base64
-    local = Path(run_dir or "") / "candidates" / f"candidate_{row.get('position')}.jpg"
+    local=Path(run_dir or "")/"candidates"/f"candidate_{row.get('position')}.jpg"
     try:
         if local.is_file():
-            img = Image.open(local).convert("RGB")
-            img.thumbnail((72, 72))
-            buf = io.BytesIO()
-            img.save(buf, format="JPEG")
-            b64 = base64.b64encode(buf.getvalue()).decode()
-            return f'<img src="data:image/jpeg;base64,{b64}" width="72" style="border-radius:8px; border:1px solid #1a2a3a;" />'
-    except Exception:
-        pass
-    hotlink = row.get("thumbnail_url") or ""
-    if hotlink.startswith("http"):
-        return f'<img src="{hotlink}" width="72" loading="lazy" style="border-radius:8px; border:1px solid #1a2a3a;" />'
-    return ""
+            img=Image.open(local).convert("RGB"); img.thumbnail((72,72)); buf=io.BytesIO(); img.save(buf, format="JPEG"); return f'<img src="data:image/jpeg;base64,{base64.b64encode(buf.getvalue()).decode()}" width="72" style="border-radius:8px; border:1px solid #1a2a3a;" />'
+    except: pass
+    hotlink=row.get("thumbnail_url") or ""
+    return f'<img src="{hotlink}" width="72" style="border-radius:8px; border:1px solid #1a2a3a;" />' if hotlink.startswith("http") else ""
 
-def _validate_link(url: str) -> tuple[str | None, str | None]:
-    url = (url or "").strip()
-    if not url:
-        return None, None
-    if not url.startswith("http"):
-        return None, "Link must start with http(s)://"
-    # use images.download_image to temp to validate reachability + is image
-    from face_search import images
-    tf = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
-    tf.close()
-    ok = images.download_image(url, tf.name)
-    if not ok:
-        try:
-            os.unlink(tf.name)
-        except Exception:
-            pass
-        return None, "Link unreachable or not an image — check URL."
-    return tf.name, None
-
-# ── input: browse on top, paste-link field below (link takes precedence if both) ─
-st.markdown('<div class="cyber-panel">', unsafe_allow_html=True)
-st.markdown('<div style="font-family:Share Tech Mono; font-size:12px; letter-spacing:0.12em; color:#00E5FF;">⚡ INPUT — BROWSE IMAGE</div>', unsafe_allow_html=True)
-browse_path, link_path = None, None
-browse_err, link_err = None, None
-
-up = st.file_uploader("Drop PNG/JPG/WEBP (≤5 MB)", type=["png","jpg","jpeg","webp"], label_visibility="collapsed")
+up=st.file_uploader("Drop PNG/JPG/WEBP (≤5 MB)", type=["png","jpg","jpeg","webp"], label_visibility="collapsed")
+browse_path, browse_err=None,None
 if up is not None:
-    browse_path, browse_err = _validate_and_stage_file(up)
-    if browse_err:
-        st.markdown(f'<div class="cyber-badge cyber-err">{browse_err}</div>', unsafe_allow_html=True)
+    browse_path,browse_err=_validate_and_stage_file(up)
+    if browse_err: st.markdown(f'<div class="cyber-badge cyber-err">{browse_err}</div>', unsafe_allow_html=True)
 
-st.markdown('<div style="font-family:Share Tech Mono; font-size:12px; letter-spacing:0.12em; color:#00E5FF; margin-top:10px;">↗ OR PASTE LINK</div>', unsafe_allow_html=True)
-link_in = st.text_input("Image URL", placeholder="https://…", label_visibility="collapsed")
+link_in=st.text_input("Or paste image URL", placeholder="https://…", label_visibility="collapsed")
+link_path, link_err=None,None
 if link_in.strip():
-    with st.spinner("Checking link…"):
-        link_path, link_err = _validate_link(link_in)
-    if link_err:
-        st.markdown(f'<div class="cyber-badge cyber-err">{link_err}</div>', unsafe_allow_html=True)
-    elif link_path:
-        st.markdown('<div class="cyber-badge cyber-ok">Link OK — image reachable</div>', unsafe_allow_html=True)
-st.markdown('</div>', unsafe_allow_html=True)
+    from face_search import images
+    tf=tempfile.NamedTemporaryFile(delete=False, suffix=".jpg"); tf.close()
+    ok=images.download_image(link_in.strip(), tf.name)
+    if not ok: link_err="Link unreachable or not an image"
+    else: link_path=tf.name
+    if link_err: st.markdown(f'<div class="cyber-badge cyber-err">{link_err}</div>', unsafe_allow_html=True)
+    elif link_path: st.markdown('<div class="cyber-badge cyber-ok">Link OK</div>', unsafe_allow_html=True)
 
-# decide query path (link precedence)
-query_path = None
-input_error = None
-if link_path and browse_path:
-    # both provided — prefer link, warn
-    st.warning("Both browse and link provided — using link. Clear one to avoid confusion.")
-    query_path = link_path
-elif link_path:
-    query_path = link_path
-    input_error = link_err
-elif browse_path:
-    query_path = browse_path
-    input_error = browse_err
+query_path=None; input_error=None
+if link_path and browse_path: st.warning("Both provided – using link."); query_path=link_path
+elif link_path: query_path=link_path; input_error=link_err
+elif browse_path: query_path=browse_path; input_error=browse_err
+can_proceed=query_path is not None and input_error is None
 
-can_proceed = query_path is not None and input_error is None
-
-# ── preview + facebox ────────────────────────────────────────────────────────
+# Preview
 if query_path:
-    st.markdown('<div style="height:12px"></div>', unsafe_allow_html=True)
-    st.markdown('<div class="cyber-panel">', unsafe_allow_html=True)
-    st.markdown('<div style="font-family:Share Tech Mono; font-size:11px; color:#7a8a9e;">PREVIEW — FACE CHECK</div>', unsafe_allow_html=True)
+    st.markdown('<div style="height:8px"></div>', unsafe_allow_html=True)
     try:
-        pil = Image.open(query_path).convert("RGB")
-        # keep preview reasonably sized
-        pil.thumbnail((560, 560))
-        # bboxes need original scale — use the staged file (same dims as thumbnail after mapping? use pil size)
-        # For simplicity map bbox from cv2 original (same file) to thumbnail scale
+        pil=Image.open(query_path).convert("RGB"); pil.thumbnail((560,560))
         import cv2
-        orig = cv2.imread(query_path)
-        h0, w0 = orig.shape[:2] if orig is not None else pil.size[::-1]
-        bboxes = _face_bboxes_for_preview(query_path)
-        # scale bboxes to thumbnail
-        if bboxes and pil.size != (w0, h0):
-            sx = pil.size[0] / w0
-            sy = pil.size[1] / h0
-            bboxes = [[b[0]*sx, b[1]*sy, b[2]*sx, b[3]*sy] for b in bboxes]
-            st.session_state.query_bboxes = bboxes
-        else:
-            st.session_state.query_bboxes = bboxes
-        st.session_state.query_path = query_path
-        boxed = _draw_facebox(pil.copy(), bboxes)
-        st.image(boxed, caption=f"Faces detected: {len(bboxes)}", width=420)
+        orig=cv2.imread(query_path)
+        from face_search import faces as _faces
+        app=_faces._get_app()
+        bboxes=[f.bbox for f in app.get(orig)] if orig is not None else []
+        # scale to thumbnail
         if bboxes:
-            st.markdown('<div class="cyber-badge cyber-ok">● FACE DETECTED — APPROVED ✓</div>', unsafe_allow_html=True)
-        else:
-            st.markdown('<div class="cyber-badge cyber-err">○ NO FACE DETECTED — cannot search</div>', unsafe_allow_html=True)
-            can_proceed = False
-    except Exception as e:
-        st.markdown(f'<div class="cyber-badge cyber-err">Preview failed: {e}</div>', unsafe_allow_html=True)
-        can_proceed = False
-    st.markdown('</div>', unsafe_allow_html=True)
-else:
-    if input_error:
-        st.markdown(f'<div class="cyber-badge cyber-err">{input_error}</div>', unsafe_allow_html=True)
+            h0,w0=orig.shape[:2]; sx=pil.size[0]/w0; sy=pil.size[1]/h0
+            bboxes=[[b[0]*sx,b[1]*sy,b[2]*sx,b[3]*sy] for b in bboxes]
+        # draw
+        draw=ImageDraw.Draw(pil)
+        for x1,y1,x2,y2 in bboxes: draw.rectangle([int(x1),int(y1),int(x2),int(y2)], outline="#00E5FF", width=3)
+        st.image(pil, caption=f"Faces: {len(bboxes)}", width=380)
+        if bboxes: st.markdown('<div class="cyber-badge cyber-ok">● FACE DETECTED ✓</div>', unsafe_allow_html=True)
+        else: st.markdown('<div class="cyber-badge cyber-err">○ NO FACE – cannot search</div>', unsafe_allow_html=True); can_proceed=False
+    except Exception as e: st.markdown(f'<div class="cyber-badge cyber-err">Preview: {e}</div>', unsafe_allow_html=True); can_proceed=False
 
-# ── search ───────────────────────────────────────────────────────────────────
-st.markdown('<div style="height:12px"></div>', unsafe_allow_html=True)
-col_go, col_info = st.columns([0.38, 0.62])
-with col_go:
-    go = st.button("▶ SEARCH", type="primary", disabled=not can_proceed, use_container_width=True)
-with col_info:
-    st.markdown('<div style="color:#7a8a9e; font-size:11px; padding-top:8px;">URL-only · Serp Lens · 1 search credit · Top 10 ranked</div>', unsafe_allow_html=True)
+st.markdown('</div>', unsafe_allow_html=True)  # end ROW 1
+
+# ── ROW 2 — BLOCKCHAIN ────────────────────────────────────────────────────────
+render_blockchain_config_panel()
+
+# ── SEARCH ────────────────────────────────────────────────────────────────────
+st.markdown('<div style="height:10px"></div>', unsafe_allow_html=True)
+anchor_wanted=st.checkbox("⛓ Anchor verified match on-chain (needs RPC + contract, private key for write; no key = hash-only)", value=False, help="When checked, top verified post is hashed (canonical JSON) -> bytes32 and stored via VerificationRegistry.storeRecord. Without key, hash still computed for tamper demo.")
+col_go,col_info=st.columns([0.35,0.65])
+with col_go: go=st.button("▶ SEARCH", type="primary", disabled=not can_proceed, use_container_width=True)
+with col_info: st.caption("URL-only · 1 search credit · Top 10 · LLM passes github/bebee/bold.pro immediately, shows all similar")
 
 if go:
-    if not can_proceed:
-        st.error("Fix input errors before searching.")
+    if not can_proceed: st.error("Fix input first")
     else:
-        # prefer link url directly if user pasted link, else host the staged file
         from face_search.pipeline import run as pipeline_run
         try:
-            with st.spinner("Hosting → Lens → verifying 10 candidates…"):
-                # if link was used, pass image_url directly (no re-host)
-                if link_path and query_path == link_path:
-                    report = pipeline_run(image="", image_url=link_in.strip(), top_n=10, live=True, llm_model=llm_model)
-                else:
-                    report = pipeline_run(image=query_path, image_url="", top_n=10, live=True, llm_model=llm_model)
-            st.session_state.report = report
-            st.session_state.hosted_url = report.get("query", {}).get("hosted_url")
-        except ImgOpsValidationError as e:
-            st.error(f"Image too large for host (5 MB limit): {e}")
-        except Exception as e:
-            st.error(f"Search failed: {e}")
+            with st.spinner("Hosting → Lens → verifying 10…"):
+                if link_path and query_path==link_path: report=pipeline_run(image="", image_url=link_in.strip(), top_n=10, live=True, llm_model=llm_model, anchor=anchor_wanted)
+                else: report=pipeline_run(image=query_path, image_url="", top_n=10, live=True, llm_model=llm_model, anchor=anchor_wanted)
+            st.session_state.report=report
+            bc=report.get("blockchain")
+            if anchor_wanted and bc and bc.get("items") and bc["items"][0].get("receipt"): st.toast(f"Anchored {bc['items'][0]['bytes32_hex'][:10]}…", icon="⛓")
+        except ImgOpsValidationError as e: st.error(f"Image too large: {e}")
+        except Exception as e: st.error(f"Search failed: {e} – check SERPAPI_KEY / .env")
 
-# ── results ──────────────────────────────────────────────────────────────────
-report = st.session_state.get("report")
+# ── RESULTS — two columns: LEFT data, RIGHT blockchain ─────────────────────────
+report=st.session_state.get("report")
 if report:
-    hosted = report.get("query", {}).get("hosted_url")
-    run_dir = report.get("run_dir", "")
-    st.markdown('<div style="height:12px"></div>', unsafe_allow_html=True)
-    st.markdown('<div class="cyber-panel">', unsafe_allow_html=True)
-    st.markdown(f'<div style="font-family:Share Tech Mono; font-size:11px; color:#7a8a9e;">RESULTS — {report.get("mode")} · Candidates {report.get("candidates_found")} · Ranked {len(report.get("ranked",[]))} · Verified {report.get("verified")} · searches {report.get("searches_spent")}</div>', unsafe_allow_html=True)
-    if hosted:
-        st.caption(f"Hosted URL (1h): {hosted}")
-    ranked = report.get("ranked") or []
-    if not ranked:
-        st.info("No ranked results.")
-    else:
-        for i, row in enumerate(ranked[:10], 1):
-            sim = row.get("similarity")
-            sim_txt = f"{sim:.4f}" if sim is not None else "—"
-            verified = "✓" if row.get("verified") else "·"
-            has_face = "●" if row.get("has_face") else "○"
-            color = "#00FF88" if row.get("verified") else ("#7a8a9e" if not row.get("has_face") else "#00E5FF")
-            thumb_html = _thumb_html(run_dir, row)
-            st.markdown(f"""
-<div class="rank-card">
-  <div style="display:flex; gap:12px; align-items:flex-start;">
-    {thumb_html}
-    <div style="flex:1; min-width:0;">
-      <div style="display:flex; justify-content:space-between; align-items:center;">
-        <div style="font-family:Share Tech Mono; font-size:12px; color:{color};">[{i}] {verified} {has_face} sim {sim_txt} — {row.get('platform')} — {row.get('source')}</div>
-        <div style="font-size:11px; color:#7a8a9e;">{row.get('match_kind')}</div>
-      </div>
-      <div style="font-size:13px; color:#E6F0FF; margin-top:4px;">{row.get('title')}</div>
-      <div style="font-size:11px; margin-top:4px;"><a href="{row.get('page_url')}" target="_blank">{row.get('page_url')}</a></div>
-      <div style="font-size:11px; color:#7a8a9e;">thumb: <a href="{row.get('thumbnail_url')}" target="_blank">thumb</a> · image: <a href="{row.get('image_url')}" target="_blank">image</a></div>
-    </div>
-  </div>
-</div>
-""", unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-    # downloads
-    import json
-    cdl1, cdl2 = st.columns(2)
-    with cdl1:
-        st.download_button("⬇ report.json", data=json.dumps(report, indent=2), file_name="report.json", mime="application/json", use_container_width=True)
-    with cdl2:
-        # lens_raw lives in run_dir
-        raw_path = Path(report.get("run_dir", "")) / "lens_raw.json"
-        if raw_path.exists():
-            st.download_button("⬇ lens_raw.json", data=raw_path.read_bytes(), file_name="lens_raw.json", use_container_width=True)
+    # header bar
+    st.markdown('<div style="height:10px"></div>', unsafe_allow_html=True)
+    st.markdown(f'<div style="font-family:Share Tech Mono; font-size:11px; color:#7a8a9e;">RESULTS — {report.get("mode")} · Candidates {report.get("candidates_found")} · Ranked {len(report.get("ranked",[]))} · Verified {report.get("verified")} · searches {report.get("searches_spent")} · model {report.get("llm_model","")[:22]}</div>', unsafe_allow_html=True)
+    if report.get("query",{}).get("hosted_url"): st.caption(f"Hosted URL (1h): {report['query']['hosted_url']}")
+    llm_status=report.get("llm_status","ok")
+    llm_note=report.get("llm_note","")
+    if llm_status.startswith("error"):
+        st.error(f"⚠️ LLM failing — {llm_note} — face search is perfect, outputs are fallback. Change model above.")
+    elif llm_status=="fallback_no_key":
+        st.warning(f"LLM fallback — {llm_note}")
+
+    col_data, col_chain = st.columns([1.35, 0.85], gap="medium")
+
+    with col_data:
+        st.markdown('<div class="cyber-panel">', unsafe_allow_html=True)
+        st.markdown('<div style="font-family:Share Tech Mono; font-size:11px; color:#00E5FF;">━━ DATA — FINALIZED PROFILES ━━</div>', unsafe_allow_html=True)
+        finalized=report.get("finalized_profiles") or []
+        if finalized:
+            for i,row in enumerate(finalized[:10],1):
+                llm=row.get("llm",{}); sim=row.get("similarity"); simt=f"{sim:.4f}" if sim is not None else "—"
+                st.markdown(f"<div class='rank-card' style='border-color: rgba(0,255,136,0.5);'><div style='font-family:Share Tech Mono; font-size:11px; color:#00FF88;'>[{i}] ✓ {simt} — {row.get('platform')} — {row.get('source')}</div><div style='font-size:12px; color:#E6F0FF;'>{row.get('title')}</div><div style='font-size:11px;'><a href='{row.get('page_url')}' target='_blank'>{row.get('page_url')}</a></div><div style='font-size:10px; color:#7a8a9e;'>{llm.get('reason','')[:110]}</div></div>", unsafe_allow_html=True)
         else:
-            st.caption("lens_raw.json in run dir")
-    st.caption(f"Run dir: {report.get('run_dir')}")
+            if report.get("verified")==0: st.info("No verified faces — try another image or lower threshold.")
+            else: st.caption("No finalized — showing ranked below. Add OpenRouter key for better LLM.")
+        st.markdown('<div style="font-family:Share Tech Mono; font-size:11px; color:#7a8a9e; margin-top:10px;">RANKED TOP 10</div>', unsafe_allow_html=True)
+        ranked=report.get("ranked") or []
+        run_dir=report.get("run_dir","")
+        if not ranked: st.info("No ranked.")
+        else:
+            for i,row in enumerate(ranked[:8],1):
+                sim=row.get("similarity"); simt=f"{sim:.4f}" if sim is not None else "—"
+                verified="✓" if row.get("verified") else "·"; has_face="●" if row.get("has_face") else "○"
+                llm=row.get("llm",{}); badge=" ✓ profile" if llm.get("is_social_profile") else ""; bcol="#00FF88" if llm.get("is_social_profile") else "#7a8a9e"
+                reason=llm.get("reason","no verdict")
+                if "404" in reason: reason="⚠️ 404 change model | "+reason
+                elif "401" in reason: reason="⚠️ 401 check key | "+reason
+                color="#00FF88" if row.get("verified") else ("#7a8a9e" if not row.get("has_face") else "#00E5FF")
+                thumb=_thumb_html(run_dir,row)
+                st.markdown(f"<div class='rank-card' style='padding:8px;'><div style='display:flex; gap:8px;'><div>{thumb}</div><div style='flex:1;'><div style='font-size:11px; color:{color};'>[{i}] {verified}{has_face} {simt}<span style='color:{bcol}'>{badge}</span> {row.get('platform')}</div><div style='font-size:11px; color:#E6F0FF;'>{row.get('title')[:70]}</div><div style='font-size:10px;'><a href='{row.get('page_url')}' target='_blank'>link</a> <span style='color:#7a8a9e;'>{reason[:90]}</span></div></div></div></div>", unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+        # downloads inside left col
+        import json
+        c1,c2=st.columns(2)
+        with c1: st.download_button("⬇ report.json", data=json.dumps(report, indent=2), file_name="report.json", mime="application/json", use_container_width=True)
+        with c2:
+            raw=Path(report.get("run_dir",""))/"lens_raw.json"
+            if raw.exists(): st.download_button("⬇ lens_raw.json", data=raw.read_bytes(), file_name="lens_raw.json", use_container_width=True)
+
+    with col_chain:
+        # Blockchain column — fixed, clean, beside data
+        try:
+            from ui.blockchain_panel import render_blockchain_result_panel
+            # need to ensure it renders inside this column
+            render_blockchain_result_panel(report)
+        except Exception as e:
+            st.error(f"Chain error: {e}")
+        st.caption(f"Run dir: {report.get('run_dir')}")
+        st.caption("Local simulated chain — no Sepolia/faucet needed. Sepolia: `python -m blockchain_verify.deploy --expect-sepolia`")
 
 st.markdown('<div style="height:24px"></div>', unsafe_allow_html=True)
-st.caption("Cyber theme · URL-only · 5 MB host limit · Top 10 default · Headless toggle stored (no-op until browser fetcher exists)")
+st.caption("Row 1 = data (search + finalized profiles). Row 2 = blockchain (hash + anchor + re-verify). URL-only · 5 MB · Top 10")

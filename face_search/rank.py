@@ -10,6 +10,13 @@ _PLATFORM_BY_DOMAIN = {
     "twitter.com": "twitter",
     "instagram.com": "instagram",
     "github.com": "github",
+    "bebee.com": "bebee",
+    "bold.pro": "bold.pro",
+    "devfolio.co": "devfolio",
+    "medium.com": "medium",
+    "kaggle.com": "kaggle",
+    "dribbble.com": "dribbble",
+    "behance.net": "behance",
 }
 
 

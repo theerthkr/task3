@@ -24,6 +24,33 @@ SOCIAL_DOMAINS = (
     "twitter.com",
     "instagram.com",
     "github.com",
+    "bebee.com",
+    "bold.pro",
+    "devfolio.co",
+    "medium.com",
+)
+
+# Additional profile hosts that are not classic social but count as person profiles (SSOT)
+PROFILE_DOMAINS = (
+    "bebee.com",
+    "bold.pro",
+    "devfolio.co",
+    "github.com",
+    "medium.com",
+    "kaggle.com",
+    "dribbble.com",
+    "behance.net",
+)
+
+# Heuristic path fragments that strongly indicate a person profile page
+PROFILE_PATH_HINTS = (
+    "/in/",
+    "/people/",
+    "/profile/",
+    "/user/",
+    "/users/",
+    "/u/",
+    "/@",
 )
 
 USER_AGENT = (

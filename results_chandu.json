@@ -1,0 +1,25 @@
+{
+  "mode": "LIVE",
+  "searches_spent": 1,
+  "query": {
+    "path": "chandu.png",
+    "faces_found": 1
+  },
+  "threshold": 0.45,
+  "candidates_found": 10,
+  "processed": 10,
+  "downloaded": 10,
+  "with_faces": 10,
+  "verified": 1,
+  "matches": [
+    {
+      "title": "Chandraveer Singh Solanki | Find professionals and ...",
+      "source": "BeBee",
+      "platform": "web",
+      "page_url": "https://bebee.com/in/people/chandraveer-singh-solanki",
+      "image_url": "https://media.bebee.com/users/id/q8xGQ19fddd0a7cc/profile-1786133126370.jpg",
+      "similarity": 0.9944
+    }
+  ],
+  "run_dir": "runs/20260907T090430Z"
+}

@@ -1,0 +1,12 @@
+# blockchain_verify – minimal deps (hashing itself is stdlib-only)
+# Install with: pip install -r blockchain_verify/requirements.txt
+
+# Core chain
+web3>=6.0.0
+py-solc-x>=1.1.0
+python-dotenv>=1.0.0
+
+# Optional: local simulated chain for tests / offline demo (no Ganache needed)
+# eth-tester[py-evm] pulls py-evm for an in-process EVM.
+# Keep commented by default to avoid heavy pull; uncomment if you want `pytest` local-chain tests.
+# eth-tester[py-evm]>=0.9.0
