@@ -20,6 +20,7 @@ No `.env` needed for demo. For live features, add keys in the website (top row) 
 
 > ## ⚠️ IMPORTANT — READ BEFORE YOU SEARCH
 > **⏳ LLM takes a lot of time (20-40s) if it works — keep tab open!** Face search itself is instant, but OpenRouter judges 8-10 profiles × ~600 tokens each. You will see `LLM ON` → `Hosting → Lens → verifying 10…` → then `FINALIZED PROFILES`. If no `OPENROUTER_API_KEY`, it falls back to heuristics (still passes `github / bebee / bold.pro`).
+> **⏳ First run: face models (~90MB `buffalo_l`) download in background — preview takes 20-30s, keep tab open!** Cached to `.insightface_cache/` after, next runs instant. Shown as `Loading face models (first run 20-30s)…` in website.
 > **SERP API: leave empty** — already bundled (`api_key.json` with working key). **Only paste your own if you see `429` / quota error.**
 > **OpenRouter: paste `sk-or-…` to actually use LLM** — pick any `✓ FREE` model below. Without it you get fallback only.
 > **Blockchain: 0 setup** — local in-memory, just check `⛓ Anchor` before search.

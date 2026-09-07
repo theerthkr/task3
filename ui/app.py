@@ -121,15 +121,21 @@ elif link_path: query_path=link_path; input_error=link_err
 elif browse_path: query_path=browse_path; input_error=browse_err
 can_proceed=query_path is not None and input_error is None
 
-# Preview
+# Preview — face models download on first run (~90MB buffalo_l, 20-30s)
 if query_path:
     st.markdown('<div style="height:8px"></div>', unsafe_allow_html=True)
+    # First-run warning: InsightFace downloads to .insightface_cache
+    _model_dir = Path(".insightface_cache/models/buffalo_l")
+    if not _model_dir.exists() or not any(_model_dir.glob("*.onnx")):
+        st.warning("⏳ First run: face models (~90MB `buffalo_l`) downloading in background — preview will take 20-30s. Keep tab open, do NOT reload.", icon="⚠️")
+        st.caption("Models cache to `.insightface_cache/` — next runs are instant.")
     try:
         pil=Image.open(query_path).convert("RGB"); pil.thumbnail((560,560))
         import cv2
         orig=cv2.imread(query_path)
         from face_search import faces as _faces
-        app=_faces._get_app()
+        with st.spinner("Loading face models (first run 20-30s)…"):
+            app=_faces._get_app()
         bboxes=[f.bbox for f in app.get(orig)] if orig is not None else []
         # scale to thumbnail
         if bboxes:
