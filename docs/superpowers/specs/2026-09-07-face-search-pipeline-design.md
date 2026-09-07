@@ -54,6 +54,18 @@ This is **reverse-image + local face verification**, not a PimEyes/FaceCheck-sty
 4. Provide test image (file or URL) with usage rights.
 5. `cp .env.example .env`, paste keys, run CLI.
 
+## 10. Revision 2026-09-07 — SerpApi-only scope (user decision)
+- Bing Visual Search deferred; SerpApi Google Lens is the single search source.
+- Reference repo cloned to `HHGOA-FACE-BLOCKCHAIN/` (read-only reference, not a dependency).
+  Reused from it: upload-then-`google_lens`-search flow, `visual_matches` parsing shape,
+  UA-header download + PIL verify + thumbnail fallback, verified-first ranking.
+  Dropped: DeepFace/TensorFlow (incompatible with Python 3.14) → InsightFace `buffalo_l`;
+  blockchain anchoring (out of scope).
+- `api_key.json` holds the raw SerpApi key (not a JSON object); loader supports both.
+- Quota rules (SerpApi free plan, from official docs): default dry-run (zero searches);
+  live search only with explicit `--live`; quota pre-check via free `account.json`;
+  never `no_cache=true` (cached repeats are free); `--reuse-cache` replays saved JSON.
+
 ## 9. Self-review
 - No TBD/TODO placeholders; thresholds and defaults explicit.
 - Consistent: single-source fallback matches error-handling section; social-boost matches output decision.

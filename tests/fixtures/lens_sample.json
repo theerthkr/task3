@@ -1,0 +1,24 @@
+{
+  "visual_matches": [
+    {
+      "position": 1,
+      "title": "Jane Doe — ExampleConf",
+      "link": "https://example.com/talk",
+      "source": "Example",
+      "thumbnail": "https://example.com/t.jpg",
+      "image": "https://example.com/i.jpg",
+      "image_width": 800,
+      "image_height": 600
+    }
+  ],
+  "exact_matches": [
+    {
+      "position": 1,
+      "title": "Jane portrait",
+      "link": "https://linkedin.com/in/janedoe",
+      "source": "LinkedIn",
+      "thumbnail": "https://example.com/t2.jpg",
+      "image": "https://example.com/i2.jpg"
+    }
+  ]
+}

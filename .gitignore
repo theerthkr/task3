@@ -1,0 +1,8 @@
+api_key.json
+.env
+.venv/
+.insightface_cache/
+__pycache__/
+.pytest_cache/
+runs/*
+!runs/.gitkeep
