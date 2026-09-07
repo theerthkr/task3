@@ -116,6 +116,25 @@ def _validate_and_stage_file(uploaded) -> tuple[str | None, str | None]:
     tf.close()
     return tf.name, None
 
+def _thumb_html(run_dir: str, row: dict) -> str:
+    """72px thumb: local downloaded file first, Lens thumbnail hotlink fallback."""
+    import base64
+    local = Path(run_dir or "") / "candidates" / f"candidate_{row.get('position')}.jpg"
+    try:
+        if local.is_file():
+            img = Image.open(local).convert("RGB")
+            img.thumbnail((72, 72))
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG")
+            b64 = base64.b64encode(buf.getvalue()).decode()
+            return f'<img src="data:image/jpeg;base64,{b64}" width="72" style="border-radius:8px; border:1px solid #1a2a3a;" />'
+    except Exception:
+        pass
+    hotlink = row.get("thumbnail_url") or ""
+    if hotlink.startswith("http"):
+        return f'<img src="{hotlink}" width="72" loading="lazy" style="border-radius:8px; border:1px solid #1a2a3a;" />'
+    return ""
+
 def _validate_link(url: str) -> tuple[str | None, str | None]:
     url = (url or "").strip()
     if not url:
@@ -245,6 +264,7 @@ if go:
 report = st.session_state.get("report")
 if report:
     hosted = report.get("query", {}).get("hosted_url")
+    run_dir = report.get("run_dir", "")
     st.markdown('<div style="height:12px"></div>', unsafe_allow_html=True)
     st.markdown('<div class="cyber-panel">', unsafe_allow_html=True)
     st.markdown(f'<div style="font-family:Share Tech Mono; font-size:11px; color:#7a8a9e;">RESULTS — {report.get("mode")} · Candidates {report.get("candidates_found")} · Ranked {len(report.get("ranked",[]))} · Verified {report.get("verified")} · searches {report.get("searches_spent")}</div>', unsafe_allow_html=True)
@@ -260,15 +280,21 @@ if report:
             verified = "✓" if row.get("verified") else "·"
             has_face = "●" if row.get("has_face") else "○"
             color = "#00FF88" if row.get("verified") else ("#7a8a9e" if not row.get("has_face") else "#00E5FF")
+            thumb_html = _thumb_html(run_dir, row)
             st.markdown(f"""
 <div class="rank-card">
-  <div style="display:flex; justify-content:space-between; align-items:center;">
-    <div style="font-family:Share Tech Mono; font-size:12px; color:{color};">[{i}] {verified} {has_face} sim {sim_txt} — {row.get('platform')} — {row.get('source')}</div>
-    <div style="font-size:11px; color:#7a8a9e;">{row.get('match_kind')}</div>
+  <div style="display:flex; gap:12px; align-items:flex-start;">
+    {thumb_html}
+    <div style="flex:1; min-width:0;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div style="font-family:Share Tech Mono; font-size:12px; color:{color};">[{i}] {verified} {has_face} sim {sim_txt} — {row.get('platform')} — {row.get('source')}</div>
+        <div style="font-size:11px; color:#7a8a9e;">{row.get('match_kind')}</div>
+      </div>
+      <div style="font-size:13px; color:#E6F0FF; margin-top:4px;">{row.get('title')}</div>
+      <div style="font-size:11px; margin-top:4px;"><a href="{row.get('page_url')}" target="_blank">{row.get('page_url')}</a></div>
+      <div style="font-size:11px; color:#7a8a9e;">thumb: <a href="{row.get('thumbnail_url')}" target="_blank">thumb</a> · image: <a href="{row.get('image_url')}" target="_blank">image</a></div>
+    </div>
   </div>
-  <div style="font-size:13px; color:#E6F0FF; margin-top:4px;">{row.get('title')}</div>
-  <div style="font-size:11px; margin-top:4px;"><a href="{row.get('page_url')}" target="_blank">{row.get('page_url')}</a></div>
-  <div style="font-size:11px; color:#7a8a9e;">thumb: <a href="{row.get('thumbnail_url')}" target="_blank">thumb</a> · image: <a href="{row.get('image_url')}" target="_blank">image</a></div>
 </div>
 """, unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
