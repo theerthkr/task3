@@ -9,7 +9,7 @@ import json
 import os
 from pathlib import Path
 
-_KEY_FIELDS = ("api_key", "SERPAPI_KEY", "serpapi_key", "key")
+_KEY_FIELDS = ("api_key", "SERPAPI_KEY", "SERP_API_KEY", "serpapi_key", "key")
 
 
 def load_key(search_dir=None, env=None) -> str:
@@ -30,7 +30,7 @@ def load_key(search_dir=None, env=None) -> str:
 
 
 def _read_key_file(path: Path) -> str:
-    text = path.read_text(encoding="utf-8-sig").strip().strip('"').strip("'")
+    text = path.read_text(encoding="utf-8-sig").strip()
     if not text:
         return ""
     if text.startswith("{"):
@@ -42,4 +42,21 @@ def _read_key_file(path: Path) -> str:
             if value:
                 return value
         return ""
-    return text.split()[0]
+    assignments = {}
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        name, _, value = line.partition("=")
+        assignments[name.strip()] = value.strip().strip('"').strip("'")
+    for field in _KEY_FIELDS:
+        if assignments.get(field):
+            return assignments[field]
+    if len(assignments) == 1:
+        single = next(iter(assignments.values()))
+        if single:
+            return single
+    first = text.split()[0].strip('"').strip("'")
+    if "=" in first:
+        return ""
+    return first

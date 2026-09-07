@@ -26,3 +26,13 @@ def test_missing_key_raises(tmp_path):
 
     with pytest.raises(ValueError):
         load_key(search_dir=tmp_path, env={})
+
+
+def test_loads_env_assignment_style(tmp_path):
+    (tmp_path / "api_key.json").write_text('SERP_API_KEY="ABC123"')
+    assert load_key(search_dir=tmp_path, env={}) == "ABC123"
+
+
+def test_loads_unquoted_assignment_style(tmp_path):
+    (tmp_path / "api_key.json").write_text("SERPAPI_KEY=XYZ789")
+    assert load_key(search_dir=tmp_path, env={}) == "XYZ789"
